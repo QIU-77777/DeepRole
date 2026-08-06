@@ -1,0 +1,74 @@
+# ============================================
+# 应用行为配置
+# 部署相关配置（API 密钥、模型选择等）请在 .env 中设置
+# ============================================
+
+[consolidation]
+# 整理 LLM 的温度：较低值保证输出稳定
+temperature = 0.7
+# 整理 LLM 最大 token 数：0 表示不显式传入
+max_tokens = 0
+# user.md 整理默认输出上限：避免沿用无限制配置导致高价模型直接报 402
+player_profile_max_tokens = 2048
+
+[vector]
+# episode memory 检索返回条数
+episode_search_limit = 3
+# understanding 检索返回条数
+understanding_search_limit = 3
+# 向量检索固定候选数
+vector_candidate_limit = 15
+# rerank 后保留条数，再做 recency
+rerank_top_n = 10
+# relevance 权重
+relevance_weight = 0.4
+# recency 权重
+recency_weight = 0.1
+# importance 权重（来自 memory.md 中的”重要度”）
+importance_weight = 0.5
+# 游戏内时间半衰期（天）
+recency_half_life_days = 5.0
+# recency 内部权重：按加权平均融合日期与 recall 两个信号，设为 0 可禁用对应信号
+recency_date_weight = 0.7
+recency_recall_weight = 0.3
+# 混合检索：BM25 关键字检索 + 加权融合
+hybrid_search_enabled = true
+# BM25 初筛候选数
+bm25_candidate_limit = 15
+# hybrid relevance 内部权重：vector vs BM25
+vector_relevance_weight = 0.75
+bm25_relevance_weight = 0.25
+
+[history]
+# 多轮对话高低水位截断（以 turn 数为单位）：distinct turn 数超过 high 时截到 low
+history_high = 20
+history_low = 8
+# 单轮 narrator 路由 / 角色运行 / 选项生成读取 raw 历史时回溯的 turn 数；
+# 再按 visible_to + 高低水位截断进一步收窄。整理流程按 turn 切片，不受此限制。
+raw_scan_turns = 30
+
+[agent]
+# Agent LLM 调用超时（秒）：角色、narrator、整理、新角色孵化共用
+run_timeout_seconds = 300
+# Agent LLM 调用最大尝试次数：包含首次调用，失败后最多补足到该次数
+max_attempts = 3
+# Agent 对话温度
+temperature = 1.0
+# state_updater 是结构化维护任务，使用较低温度降低 JSON 格式抖动
+state_updater_temperature = 0.2
+# state_updater 输出验证失败时，在同一次 Agent run 内允许的修复重试次数
+state_updater_output_retries = 3
+
+[embedding]
+# Embedding HTTP 请求超时（秒）
+request_timeout_seconds = 60
+
+[rerank]
+# Rerank HTTP 请求超时（秒）
+request_timeout_seconds = 30
+
+[text]
+# 选项文本最大字符数
+max_choice_chars = 50
+# 长期记忆关键词最大数量
+max_episode_keywords = 8

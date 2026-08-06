@@ -1,0 +1,1062 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Partial · 偏心</title>
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/fonts/fonts.css">
+<link rel="stylesheet" href="/static/memory_graph.css?v=12">
+<script src="/static/marked.min.js"></script>
+<script src="https://unpkg.com/vis-network@9.1.9/standalone/umd/vis-network.min.js"></script>
+<script src="/static/memory_graph.js?v=12"></script>
+<script defer src="/static/alpine.min.js"></script>
+<link rel="stylesheet" href="/static/style.css?v=memory-graph-card">
+</head>
+<body>
+<svg width="0" height="0" class="icon-sprite" aria-hidden="true" style="position:absolute"><defs>
+  <g id="ic-search"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/></g>
+  <g id="ic-plus"><path d="M12 5v14"/><path d="M5 12h14"/></g>
+  <g id="ic-x"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></g>
+  <g id="ic-calendar"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18"/><path d="M8 3v4"/><path d="M16 3v4"/></g>
+  <g id="ic-worldline"><circle cx="6" cy="6" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="12" cy="18" r="2"/><path d="M8 6h3a3 3 0 0 1 3 3v7"/><path d="M16 6h-3a3 3 0 0 0-3 3v1"/></g>
+  <g id="ic-reset"><path d="M3 12a9 9 0 1 0 2.64-6.36"/><path d="M3 4.5v5h5"/></g>
+  <g id="ic-chevron-down"><path d="m6 9 6 6 6-6"/></g>
+  <g id="ic-refresh"><path d="M20 11a8 8 0 1 0-2.34 5.66"/><path d="M20 4v7h-7"/></g>
+  <g id="ic-close"><path d="M6 6 18 18"/><path d="m18 6-12 12"/></g>
+  <g id="ic-trash"><path d="M6 2h4M2 4h12M5 4l.5 9h5l.5-9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></g>
+  <g id="ic-chevron-left"><path d="m15 18-6-6 6-6"/></g>
+</defs></svg>
+<div
+  id="app"
+  x-data="agentGalApp"
+  x-cloak
+  @keydown.escape.window="handleEscape()"
+>
+  <header class="topbar">
+    <div class="brand-block">
+      <div class="brand-row">
+        <div class="brand-title">Partial</div>
+      </div>
+    </div>
+
+    <div class="topbar-actions">
+      <div class="topbar-search-wrap" x-show="messages.length" @click.outside="closeHistorySearch()">
+        <button
+          type="button"
+          class="ghost-btn menu-btn"
+          aria-label="搜索历史消息"
+          title="搜索历史消息"
+          x-ref="searchBtn"
+          :aria-expanded="historySearchOpen"
+          @click="toggleHistorySearch()"
+        >
+          <span class="btn-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#ic-search"></use></svg>
+          </span>
+          <span class="btn-label">搜索</span>
+        </button>
+
+        <div class="topbar-search-popover" x-show="historySearchOpen" x-transition.opacity x-ref="searchPopover">
+          <div class="history-search-control">
+            <span class="history-search-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#ic-search"></use></svg>
+            </span>
+            <input
+              type="search"
+              class="history-search-input"
+              placeholder="搜索历史消息…"
+              x-ref="historySearchInput"
+              x-model="searchQuery"
+              @input="onSearchInput()"
+              @keydown.enter.prevent="searchResults.length && jumpToTurn(searchResults[0].turn)"
+              @keydown.escape.stop="closeHistorySearch()"
+            />
+            <button
+              type="button"
+              class="history-search-clear"
+              x-show="searchQuery.trim()"
+              aria-label="清空搜索"
+              @click="clearHistorySearch({ keepOpen: true })"
+            >
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#ic-x"></use></svg>
+            </button>
+          </div>
+
+          <div class="history-search-panel" x-show="searchQuery.trim()" x-transition.opacity>
+            <div class="date-menu-title" x-text="searchLoading ? '搜索中…' : `搜索结果（${searchResults.length}）`"></div>
+            <template x-if="!searchLoading && !searchResults.length">
+              <div class="date-menu-empty">无匹配消息</div>
+            </template>
+            <ul class="date-menu-list" x-show="searchResults.length">
+              <template x-for="result in searchResults" :key="result.turn + ':' + result.role">
+                <li>
+                  <button type="button" class="search-result-item" @click="jumpToTurn(result.turn)">
+                    <div class="search-result-head">
+                      <span class="search-result-author" x-text="result.author || result.role"></span>
+                      <span class="search-result-turn" x-text="`轮 ${result.turn}`"></span>
+                    </div>
+                    <div class="search-result-snippet" x-html="renderSearchSnippet(result.content, searchQuery.trim())"></div>
+                  </button>
+                </li>
+              </template>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div class="date-picker-wrap" x-show="messages.length" @click.outside="dateMenuOpen = false">
+        <button
+          type="button"
+          class="ghost-btn menu-btn"
+          aria-label="历史日期"
+          title="历史日期"
+          x-ref="dateBtn"
+          :aria-expanded="dateMenuOpen"
+          @click="toggleDateMenu()"
+        >
+          <span class="btn-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#ic-calendar"></use></svg>
+          </span>
+          <span class="btn-label">历史</span>
+        </button>
+        <div class="date-menu" x-show="dateMenuOpen" x-transition.opacity x-ref="dateMenu">
+          <div class="date-menu-title">游戏内日期</div>
+          <template x-if="gameDatesLoading && !gameDates.length">
+            <div class="date-menu-empty">加载中…</div>
+          </template>
+          <template x-if="!gameDatesLoading && !gameDates.length">
+            <div class="date-menu-empty">暂无可跳转的日期</div>
+          </template>
+          <ul class="date-menu-list">
+            <template x-for="(anchor, idx) in gameDates" :key="idx + ':' + anchor.first_turn">
+              <li>
+                <button type="button" class="date-menu-item" @click="jumpToTurn(anchor.first_turn)">
+                  <span class="date-menu-date" x-text="anchor.date"></span>
+                  <span class="date-menu-range" x-text="`轮 ${anchor.first_turn}-${anchor.last_turn}`"></span>
+                </button>
+              </li>
+            </template>
+          </ul>
+        </div>
+      </div>
+
+      <button
+        type="button"
+        class="ghost-btn menu-btn"
+        x-show="messages.length"
+        aria-label="世界线"
+        title="世界线"
+        @click="openWorldline()"
+      >
+        <span class="btn-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#ic-worldline"></use></svg>
+        </span>
+        <span class="btn-label">世界线</span>
+      </button>
+
+
+
+      <button
+        type="button"
+        class="ghost-btn menu-btn"
+        x-show="messages.length"
+        aria-label="重新选择故事"
+        title="重新选择故事"
+        :disabled="busy || consolidating"
+        @click="showResetConfirmation()"
+      >
+        <span class="btn-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><use href="#ic-reset"></use></svg>
+        </span>
+        <span class="btn-label">重开</span>
+      </button>
+
+      <button
+        type="button"
+        class="ghost-btn menu-btn"
+        x-show="messages.length"
+        aria-label="新建存档"
+        title="新建存档"
+        :disabled="busy || isSaving || consolidating"
+        @click="createSave()"
+      >
+        <span class="btn-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><use href="#ic-plus"></use></svg>
+        </span>
+        <span class="btn-label" x-text="isSaving ? '存档中' : '存档'"></span>
+      </button>
+
+    </div>
+  </header>
+
+  <!-- Mobile floating menu (compact screens only) -->
+  <div
+    class="mobile-fab-root"
+    x-show="isCompact"
+    x-cloak
+    @click.outside="closeMobileMenu()"
+  >
+    <button
+      type="button"
+      class="mobile-fab-btn"
+      :aria-expanded="mobileMenuOpen"
+      :aria-label="mobileMenuOpen ? '关闭菜单' : '打开菜单'"
+      @click="toggleMobileMenu()"
+    >
+      <svg :style="mobileMenuOpen ? '' : 'transform: rotate(45deg)'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#ic-x"></use></svg>
+    </button>
+
+    <div class="mobile-menu-panel" x-show="mobileMenuOpen" x-transition.opacity>
+      <!-- Search -->
+      <div class="mm-section" x-show="messages.length">
+        <button
+          type="button"
+          class="mm-item mm-toggle"
+          :class="{ 'mm-active': mmSection === 'search' }"
+          @click="mmSection = mmSection === 'search' ? null : 'search'"
+        >
+          <span class="mm-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#ic-search"></use></svg>
+          </span>
+          <span>搜索</span>
+          <svg class="mm-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#ic-chevron-down"></use></svg>
+        </button>
+        <div class="mm-sub" x-show="mmSection === 'search'">
+          <input
+            type="search"
+            class="mm-search-input"
+            placeholder="搜索历史消息…"
+            x-model="searchQuery"
+            @input="onSearchInput()"
+            @keydown.escape.stop="mmSection = null"
+          />
+          <div class="mm-empty" x-show="searchQuery.trim() && !searchLoading && !searchResults.length">无匹配消息</div>
+          <ul class="mm-result-list" x-show="searchResults.length">
+            <template x-for="result in searchResults" :key="result.turn + ':' + result.role">
+              <li>
+                <button type="button" class="mm-result-item" @click="jumpToTurn(result.turn)">
+                  <span class="mm-result-author" x-text="result.author || result.role"></span>
+                  <span class="mm-result-snippet" x-html="renderSearchSnippet(result.content, searchQuery.trim())"></span>
+                </button>
+              </li>
+            </template>
+          </ul>
+        </div>
+      </div>
+
+      <!-- History -->
+      <div class="mm-section" x-show="messages.length">
+        <button
+          type="button"
+          class="mm-item mm-toggle"
+          :class="{ 'mm-active': mmSection === 'history' }"
+          @click="if (mmSection === 'history') { mmSection = null } else { mmSection = 'history'; ensureGameDates() }"
+        >
+          <span class="mm-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#ic-calendar"></use></svg>
+          </span>
+          <span>历史</span>
+          <svg class="mm-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#ic-chevron-down"></use></svg>
+        </button>
+        <div class="mm-sub" x-show="mmSection === 'history'">
+          <div class="mm-empty" x-show="gameDatesLoading && !gameDates.length">加载中…</div>
+          <div class="mm-empty" x-show="!gameDatesLoading && !gameDates.length">暂无可跳转的日期</div>
+          <ul class="mm-date-list" x-show="gameDates.length">
+            <template x-for="(anchor, idx) in gameDates" :key="idx + ':' + anchor.first_turn">
+              <li>
+                <button type="button" class="mm-date-item" @click="jumpToTurn(anchor.first_turn)">
+                  <span x-text="anchor.date"></span>
+                  <span class="mm-date-range" x-text="`轮 ${anchor.first_turn}`"></span>
+                </button>
+              </li>
+            </template>
+          </ul>
+        </div>
+      </div>
+
+      <div class="mm-divider" x-show="messages.length"></div>
+
+      <!-- Worldline -->
+      <button type="button" class="mm-item" x-show="messages.length" @click="closeMobileMenu(); openWorldline()">
+        <span class="mm-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#ic-worldline"></use></svg>
+        </span>
+        <span>世界线</span>
+      </button>
+
+      <!-- Reset -->
+      <button type="button" class="mm-item" x-show="messages.length" :disabled="busy || consolidating" @click="closeMobileMenu(); showResetConfirmation()">
+        <span class="mm-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><use href="#ic-reset"></use></svg>
+        </span>
+        <span>重开</span>
+      </button>
+
+      <!-- Save -->
+      <button type="button" class="mm-item" x-show="messages.length" :disabled="busy || isSaving || consolidating" @click="closeMobileMenu(); createSave()">
+        <span class="mm-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><use href="#ic-plus"></use></svg>
+        </span>
+        <span x-text="isSaving ? '存档中…' : '存档'"></span>
+      </button>
+
+      <div class="mm-divider"></div>
+
+      <!-- Archive (character roster) -->
+      <button type="button" class="mm-item" @click="closeMobileMenu(); toggleDrawer()">
+        <span class="mm-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+            <circle cx="9" cy="7" r="4"/>
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+            <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+          </svg>
+        </span>
+        <span>档案</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="main-shell">
+    <section class="chat-panel">
+      <div class="chat-shell">
+        <div id="messages" class="message-scroll" x-ref="messages" @scroll.passive="handleMessagesScroll()">
+          <div class="message-stage">
+            <template x-if="!messages.length && !busy">
+              <section class="empty-stage">
+                <div class="empty-stage-title">从一个具体场面开始</div>
+                <div class="empty-stage-copy">
+                  选择故事后，旁白会先铺开时间、地点和在场角色。你可以把输入框当成台词、动作、停顿，甚至是一句短促的试探。
+                </div>
+              </section>
+            </template>
+
+            <template x-if="loadingOlder">
+              <div class="history-loading">加载中…</div>
+            </template>
+
+            <template x-for="group in messageGroups()" :key="group.key">
+              <section class="story-beat" :class="{ 'is-open': !group.narrator }">
+                <template x-if="group.narrator">
+                  <div class="beat-divider">
+                    <span class="beat-dot" aria-hidden="true"></span>
+                    <div class="beat-copy">
+                      <span class="beat-title" x-text="group.title"></span>
+                      <span class="beat-time" x-show="group.time" x-text="group.time"></span>
+                    </div>
+                  </div>
+                </template>
+
+                <template x-for="message in group.messages" :key="message.id">
+                  <article class="message-row" :class="message.kind" :data-turn="message.turn || ''">
+                    <template x-if="message.kind === 'narrator'">
+                      <div class="narrator-shell">
+                        <template x-if="message.payload">
+                          <div class="narrator-scene">
+                            <ul class="narrator-presence" x-show="presenceEntries(message.payload).length">
+                              <template x-for="entry in presenceEntries(message.payload)" :key="entry[0]">
+                                <li>
+                                  <span class="narrator-presence-name" x-text="entry[0]"></span>
+                                  <span x-text="entry[1]"></span>
+                                </li>
+                              </template>
+                            </ul>
+                            <div x-text="message.payload.scene_description || message.content"></div>
+                          </div>
+                        </template>
+                        <template x-if="!message.payload">
+                          <div class="narrator-body markdown-body" x-html="message.html"></div>
+                        </template>
+                      </div>
+                    </template>
+
+                    <template x-if="message.kind === 'system'">
+                      <div class="system-shell">
+                        <div class="message-kicker" x-text="message.title || '系统'"></div>
+                        <div class="system-card">
+                          <div class="system-name" x-text="message.name"></div>
+                          <div class="system-identity" x-show="message.identity" x-text="message.identity"></div>
+                        </div>
+                      </div>
+                    </template>
+
+                    <template x-if="message.kind === 'agent'">
+                      <div>
+                        <div class="message-head">
+                          <span class="speaker-dot" :style="`background:${message.color};`"></span>
+                          <span class="speaker-label" x-text="message.author"></span>
+                        </div>
+                        <div class="message-card markdown-body" x-html="message.html" :style="`background:${message.background};border-color:${message.border};`"></div>
+                      </div>
+                    </template>
+
+                    <template x-if="message.kind === 'player'">
+                      <div>
+                        <div class="message-head">
+                          <span class="speaker-label" x-text="message.author"></span>
+                          <span class="speaker-dot" :style="`background:${message.color};`"></span>
+                        </div>
+                        <div class="message-card markdown-body" x-html="message.html" :style="`background:${message.background};border-color:${message.border};`"></div>
+                      </div>
+                    </template>
+                  </article>
+                </template>
+              </section>
+            </template>
+
+            <template x-if="busy">
+              <article class="message-row message-skeleton">
+                <div class="skeleton-shell">
+                  <span class="skeleton-line" style="width: 72%;"></span>
+                  <span class="skeleton-line" style="width: 58%;"></span>
+                  <span class="skeleton-line" style="width: 82%;"></span>
+                </div>
+              </article>
+            </template>
+          </div>
+
+          <div class="latest-jump-row" x-show="shouldShowJumpLatest()" x-transition.opacity>
+            <button type="button" class="latest-jump-btn" @click="jumpToLatest()" aria-label="回到最新">
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M9 3v12m0 0l-4-4m4 4l4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span class="latest-jump-dot" x-show="unreadNewMessages"></span>
+            </button>
+          </div>
+
+        </div>
+
+        <div class="feedback-strip" x-show="shouldShowNotice()">
+          <div class="notice-banner" :class="noticeTone ? `tone-${noticeTone}` : ''">
+            <div class="notice-badge" x-text="noticeBadge()"></div>
+            <div x-text="noticeText"></div>
+          </div>
+        </div>
+
+        <section class="choice-rail" x-show="shouldShowChoices()">
+          <div class="choice-rail-head">
+            <div class="choice-rail-title">建议行动</div>
+            <div class="choice-rail-subtitle" x-text="choiceRailSubtitle()"></div>
+          </div>
+
+          <div class="choice-list" x-show="choices.length > 0">
+            <template x-for="choice in choices" :key="choice">
+              <button type="button" class="choice-chip" @click="submitMessage(choice)">
+                <span class="choice-chip-text" x-text="choice"></span>
+              </button>
+            </template>
+          </div>
+
+          <div class="choice-state loading" x-show="choiceStatus === 'loading'" aria-live="polite">
+            <span class="choice-state-bars" aria-hidden="true">
+              <span></span>
+              <span></span>
+              <span></span>
+            </span>
+            <span>正在生成建议行动</span>
+          </div>
+
+          <div class="choice-state" x-show="choiceStatus === 'empty'" aria-live="polite">
+            当前无建议行动，你可以直接输入下一句。
+          </div>
+        </section>
+
+        <section class="composer-shell">
+          <div class="composer-head">
+            <div class="composer-head-left">
+              <div class="composer-title">你的行动</div>
+              <div
+                class="observe-switch-wrap"
+                :class="{ on: observeMode }"
+                x-show="messages.length > 0 && characterCount > 0"
+                @click="observeMode = !observeMode"
+                role="switch"
+                :aria-checked="observeMode"
+                tabindex="0"
+                @keydown.space.prevent="observeMode = !observeMode"
+                @keydown.enter.prevent="observeMode = !observeMode"
+              >
+                <span class="observe-switch-copy">
+                  <span class="observe-switch-label">观察模式</span>
+                  <span
+                    class="observe-info-badge"
+                    data-tooltip="观察此时角色在做什么，玩家不参与互动"
+                    aria-label="观察此时角色在做什么，玩家不参与互动"
+                  >i</span>
+                </span>
+                <div class="observe-switch-track">
+                  <div class="observe-switch-thumb"></div>
+                </div>
+              </div>
+            </div>
+            <div class="composer-tools">
+              <div class="composer-hint" x-text="observeMode ? '输入想观察的角色，Enter 发送' : 'Enter 发送，Shift + Enter 换行'"></div>
+            </div>
+          </div>
+
+          <div class="composer-body">
+            <div class="composer-field">
+              <textarea
+                id="user-input"
+                x-ref="composerInput"
+                x-model="inputText"
+                rows="1"
+                :disabled="busy"
+                :placeholder="observeMode ? '输入想观察的角色名…' : '输入你想说的话和动作，用括号表示动作，例如「早上好（挥手）」'"
+                @input="handleComposerInput($event)"
+                @focus="handleComposerFocus()"
+                @blur="handleComposerBlur()"
+                @keydown="handleInputKeydown($event)"
+              ></textarea>
+            </div>
+
+            <div class="composer-actions">
+              <button
+                type="button"
+                class="primary-btn"
+                :aria-label="busy ? '处理中' : '发送'"
+                :disabled="busy || !trimmedInput()"
+                @click="submitCurrentInput()"
+              >
+                <span class="btn-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="m4 12 15-7-3.8 14-4.4-5.1Z"/>
+                    <path d="m19 5-7.8 8"/>
+                  </svg>
+                </span>
+                <span class="send-label" x-text="busy ? '处理中' : '发送'"></span>
+              </button>
+            </div>
+          </div>
+
+          <div class="composer-foot" x-show="!isCompact">
+            <div>可以直接输入，也可以点击上方建议行动。</div>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <div class="drawer-backdrop" x-show="drawerOpen && isCompact" @click="closeDrawer()"></div>
+
+    <aside class="archive-drawer" :class="{ open: drawerOpen }">
+
+      <div class="drawer-body">
+        <div class="drawer-copy" x-show="consolidating" style="color: var(--accent-warm, #b07a2c);">记忆整理进行中，部分功能暂时不可用。</div>
+
+        <div class="drawer-section-title">在场角色</div>
+
+        <template x-if="charactersLoading">
+          <div class="character-skeleton">
+            <div class="skeleton-shell">
+              <span class="skeleton-line" style="width: 42%;"></span>
+              <span class="skeleton-line" style="width: 78%;"></span>
+              <span class="skeleton-line" style="width: 62%;"></span>
+            </div>
+          </div>
+        </template>
+
+        <template x-if="!charactersLoading && !characters.length">
+          <div class="drawer-empty">还没有遇到角色。开始一个故事后，这里会显示在场角色的身份与位置。</div>
+        </template>
+
+        <div class="character-list" x-show="!charactersLoading && characters.length">
+          <template x-for="char in characters" :key="char.name">
+            <article class="character-card" @click="openMemoryGraph(char.name)" role="button" tabindex="0" :aria-label="`查看 ${char.display_name} 的记忆图谱`" @keydown.enter="openMemoryGraph(char.name)" @keydown.space.prevent="openMemoryGraph(char.name)">
+              <div class="character-card-head">
+                <span class="character-dot" :style="`background:${getAgentStyle(char.display_name).color};`"></span>
+                <span class="character-name" x-text="char.display_name"></span>
+              </div>
+              <div class="character-card-body">
+                <div class="character-field" x-show="char.identity">
+                  <span class="character-field-label">身份</span>
+                  <span class="character-field-value" x-text="char.identity"></span>
+                </div>
+                <div class="character-field" x-show="char.location">
+                  <span class="character-field-label">位置</span>
+                  <span class="character-field-value" x-text="char.location"></span>
+                </div>
+              </div>
+              <div class="character-card-foot">记忆图谱 →</div>
+            </article>
+          </template>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <div class="overlay" x-show="storyModalOpen">
+    <div class="modal-surface">
+      <div class="story-shell">
+        <div class="story-side">
+          <div class="resume-panel" x-show="hasSave">
+            <div class="resume-label">当前进度</div>
+            <div class="resume-title">当前游戏进度</div>
+            <div class="resume-copy">这里是当前对话的最近片段和可接上的行动。</div>
+            <div class="resume-preview">
+              <div class="resume-preview-label">最近停在这里</div>
+              <div class="resume-copy" x-text="recentPreview()"></div>
+            </div>
+            <div class="resume-choice-list" x-show="initialChoices.length">
+              <template x-for="choice in initialChoices.slice(0, 3)" :key="choice">
+                <div class="resume-choice" x-text="choice"></div>
+              </template>
+            </div>
+            <div class="resume-meta">
+              <div class="meta-chip">
+                <span class="meta-chip-label">近期对话</span>
+                <span class="meta-chip-value" x-text="`${initialRecent.length} 条近期消息`"></span>
+              </div>
+              <div class="meta-chip">
+                <span class="meta-chip-label">建议行动</span>
+                <span class="meta-chip-value" x-text="`${initialChoices.length} 个建议行动`"></span>
+              </div>
+            </div>
+            <div class="resume-actions">
+              <button type="button" class="ghost-btn" x-show="canDismissStoryModal()" @click="closeStoryModal()">返回当前对话</button>
+            </div>
+          </div>
+
+          <div class="resume-panel" x-show="!hasSave">
+            <div class="resume-label">当前进度</div>
+            <div class="resume-title">还没有可继续的进度</div>
+            <div class="resume-copy">先从右侧挑一个开场。开始后，这里会变成可直接接上的进度入口。</div>
+          </div>
+        </div>
+
+        <div class="story-main">
+          <div class="story-main-head">
+            <div class="story-eyebrow">重新开场</div>
+            <div class="story-headline">或者从新的故事进入。</div>
+          </div>
+
+          <div class="story-grid">
+            <template x-if="stories.length">
+              <template x-for="(story, index) in stories" :key="story.id">
+                <button
+                  type="button"
+                  class="story-card"
+                  :class="storyCardClass(index)"
+                  @click="startNewGame(story.id)"
+                >
+                  <div class="story-card-shell">
+                    <div class="story-card-top">
+                      <div class="story-card-tagline" x-text="story.tagline || ''"></div>
+                      <div class="story-card-title" x-text="story.title || story.label"></div>
+                    </div>
+                    <div class="story-card-copy" x-text="story.summary || story.label"></div>
+                    <div class="story-card-foot">
+                      <span class="story-card-cue" x-text="storyCardCue(index)"></span>
+                      <span class="story-card-enter">进入故事 →</span>
+                    </div>
+                  </div>
+                </button>
+              </template>
+            </template>
+
+            <template x-if="!stories.length">
+              <div class="drawer-empty">故事列表加载失败或为空，请稍后重试。</div>
+            </template>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" x-show="confirmDialog.open">
+    <div class="modal-surface confirm-shell">
+      <div class="story-eyebrow">确认</div>
+      <div class="confirm-title" x-text="confirmDialog.title"></div>
+      <div class="confirm-copy" x-text="confirmDialog.body"></div>
+
+      <div class="confirm-actions">
+        <button type="button" class="ghost-btn" @click="closeConfirm()">取消</button>
+        <button type="button" class="primary-btn" @click="runConfirm()" x-text="confirmDialog.confirmText"></button>
+      </div>
+    </div>
+  </div>
+
+  <button
+    type="button"
+    class="drawer-pull-tab"
+    x-show="!isCompact"
+    :class="{ 'is-open': drawerOpen }"
+    :aria-label="drawerOpen ? '关闭档案室' : '打开档案室'"
+    :aria-expanded="drawerOpen"
+    @click="toggleDrawer()"
+  >
+    <span class="pull-tab-label">档案</span>
+  </button>
+
+  <div class="worldline-page" x-show="worldlineOpen">
+    <aside class="worldline-rail" aria-label="世界观切换">
+      <div>
+        <div class="worldline-rail-kicker">Worldlines</div>
+        <div class="worldline-rail-title">世界线</div>
+      </div>
+
+      <nav class="worldline-rail-tabs" x-show="worldTabs().length">
+        <template x-for="world in worldTabs()" :key="world.story_id">
+          <button
+            type="button"
+            class="worldline-rail-tab"
+            :class="{ active: activeWorldId === world.story_id }"
+            @click="selectWorld(world.story_id)"
+          >
+            <span class="worldline-rail-dot" aria-hidden="true"></span>
+            <span class="worldline-rail-label">
+              <span class="worldline-rail-name" x-text="world.display_name"></span>
+              <span class="worldline-rail-count" x-text="`${world.save_count || 0} nodes`"></span>
+            </span>
+          </button>
+        </template>
+      </nav>
+
+      <div class="worldline-rail-current">
+        <span>当前节点</span>
+        <strong x-text="currentWorldlineText()"></strong>
+      </div>
+    </aside>
+
+    <main class="worldline-board">
+      <header class="worldline-board-head">
+        <div>
+          <div class="worldline-title" x-text="activeWorldLabel()"></div>
+          <div class="worldline-subtitle" x-text="activeWorldDescription()"></div>
+        </div>
+
+        <div class="worldline-board-metrics">
+          <div class="worldline-board-metric">
+            <span>节点</span>
+            <strong x-text="activeWorld()?.save_count || 0"></strong>
+          </div>
+          <div class="worldline-board-metric">
+            <span>游戏</span>
+            <strong x-text="activeWorldGames().length"></strong>
+          </div>
+          <div class="worldline-board-metric">
+            <span>断点</span>
+            <strong x-text="activeWorld()?.orphan_count || 0"></strong>
+          </div>
+
+          <div class="worldline-actions">
+            <button type="button" class="icon-btn" title="刷新世界线" :disabled="saveLoading" @click="refreshSaves()">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#ic-refresh"></use></svg>
+            </button>
+            <button type="button" class="icon-btn" title="关闭世界线" @click="closeWorldline()">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#ic-close"></use></svg>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <section class="worldline-canvas-shell" x-ref="worldlineShell" aria-label="世界线图谱">
+        <template x-if="saveLoading">
+          <div class="worldline-skeleton">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+        </template>
+
+        <template x-if="!saveLoading && saveError">
+          <div class="drawer-error" x-text="saveError"></div>
+        </template>
+
+        <template x-if="!saveLoading && !saveError && !activeWorldGames().length">
+          <div class="worldline-empty">这个世界观还没有存档节点。开始故事后，新建存档会在这里生成第一条世界线。</div>
+        </template>
+
+        <div
+          class="worldline-canvas-scroll"
+          x-ref="worldlineScroll"
+          x-show="!saveLoading && !saveError && activeWorldGames().length"
+          @wheel="handleWorldlineWheel($event)"
+          @pointerdown="startWorldlineDrag($event)"
+          @pointermove="dragWorldline($event)"
+          @pointerup="stopWorldlineDrag($event)"
+          @pointercancel="stopWorldlineDrag($event)"
+          @pointerleave="stopWorldlineDrag($event)"
+        >
+          <div class="worldline-zoom-surface" :style="worldlineSurfaceStyle()">
+            <div class="worldline-game-row" :style="worldlineRowStyle()">
+              <template x-for="game in activeWorldGames()" :key="game.id">
+                <section
+                  class="worldline-game"
+                  :data-worldline-game-id="game.id"
+                  :style="`--game-width: ${game.width}px; --game-height: ${game.height}px; --game-frame-width: ${game.frameWidth}px; --game-index: ${game.index};`"
+                >
+                  <header class="worldline-game-head">
+                    <div class="worldline-game-label">
+                      <div class="worldline-game-kicker" x-text="game.kicker"></div>
+                      <div class="worldline-game-title" x-text="game.title"></div>
+                    </div>
+                    <div class="worldline-game-actions">
+                      <div class="worldline-game-count" x-text="`${game.nodes.length} nodes`"></div>
+                      <button type="button" class="save-delete-btn" :title="consolidating ? '记忆整理中，暂不可删除' : '删除整个 Game'" :disabled="busy || consolidating" @click.stop="promptDeleteGame(game)">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><use href="#ic-trash"></use></svg>
+                      </button>
+                    </div>
+                  </header>
+
+                  <div class="worldline-game-canvas" :style="`width: ${game.width}px; height: ${game.height}px;`">
+                    <svg class="worldline-game-links" :viewBox="`0 0 ${game.width} ${game.height}`" aria-hidden="true" x-html="worldlineLinkSvg(game.links)"></svg>
+
+                    <template x-for="node in game.nodes" :key="node.filename">
+                      <div
+                        class="worldline-branch-node"
+                        :class="{ current: node.save_id && node.save_id === currentSaveId, orphan: node.parent_missing }"
+                        :style="`--dot-x: ${node.dotX}px; --dot-y: ${node.dotY}px; --card-x: ${node.cardX}px; --card-y: ${node.cardY}px; --node-index: ${node.order || 0};`"
+                      >
+                        <button type="button" class="worldline-branch-point" :title="node.title || node.focus || node.filename" :aria-label="`读取 ${node.title || node.focus || node.filename}`" @click="promptLoadSave(node.filename)"></button>
+                        <article class="worldline-node-card">
+                          <div class="worldline-node-top">
+                            <div>
+                              <div class="worldline-node-kicker" x-text="worldlineNodeKicker(node)"></div>
+                              <div class="worldline-node-title" x-text="node.title || node.focus || node.filename"></div>
+                            </div>
+                            <button
+                              type="button"
+                              class="save-delete-btn worldline-node-delete"
+                              x-show="node.can_delete"
+                              :title="consolidating ? '记忆整理中，暂不可删除' : '删除这个存档节点'"
+                              :disabled="busy || consolidating"
+                              @click.stop="promptDeleteLeafSave(node)"
+                            >
+                              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><use href="#ic-trash"></use></svg>
+                            </button>
+                          </div>
+                          <div class="worldline-node-focus" x-text="node.focus || '未提供额外焦点摘要。'"></div>
+                          <div class="worldline-node-meta">
+                            <span x-text="node.display || node.display_time || node.filename"></span>
+                            <span x-show="node.turn" x-text="`轮 ${node.turn}`"></span>
+                          </div>
+                          <div class="worldline-node-actions">
+                            <button type="button" class="primary-btn save-action" :disabled="busy || consolidating" :title="consolidating ? '记忆整理进行中，请稍后再读取' : ''" @click="promptLoadSave(node.filename)">
+                              <span>读取</span>
+                            </button>
+                          </div>
+                        </article>
+                      </div>
+                    </template>
+                  </div>
+                </section>
+              </template>
+            </div>
+          </div>
+        </div>
+
+        <div class="worldline-zoom-control" x-show="!saveLoading && !saveError && activeWorldGames().length">
+          <button type="button" class="worldline-zoom-btn" title="缩小" aria-label="缩小世界线" @click="zoomWorldlineBy(0.86)">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+              <path d="M5 12h14"/>
+            </svg>
+          </button>
+          <button type="button" class="worldline-zoom-value" title="重置缩放" aria-label="重置世界线缩放" x-text="worldlineZoomLabel()" @click="resetWorldlineZoom()"></button>
+          <button type="button" class="worldline-zoom-btn" title="放大" aria-label="放大世界线" @click="zoomWorldlineBy(1.16)">
+            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><use href="#ic-plus"></use></svg>
+          </button>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div class="memory-graph-page" x-show="memoryGraphOpen">
+    <div class="memory-graph-shell" :class="{ 'is-detail-collapsed': memoryGraphDetailCollapsed }">
+        <div class="memory-graph-canvas-wrap">
+          <div
+            class="memory-graph-network"
+            x-ref="memoryGraphNetwork"
+            x-show="!memoryGraphLoading && !memoryGraphError && memoryGraphNodes.length"
+          ></div>
+          <div
+            class="memory-graph-empty memory-graph-empty--overlay"
+            x-show="memoryGraphLoading || memoryGraphError || !memoryGraphNodes.length"
+            x-text="memoryGraphEmptyText()"
+          ></div>
+        </div>
+
+        <section class="memory-graph-control-panel" aria-label="记忆图谱控制">
+          <div class="memory-graph-title-wrap">
+            <div class="story-eyebrow">Memory Graph</div>
+            <div class="memory-graph-title">记忆图谱</div>
+            <div class="memory-graph-subtitle" x-text="memoryGraphSubtitle()"></div>
+          </div>
+        </section>
+
+        <div class="memory-graph-top-actions" aria-label="记忆图谱操作">
+          <select
+            class="memory-graph-select"
+            x-model="memoryGraphAgent"
+            :disabled="memoryGraphLoading || !memoryGraphAgents.length"
+            @change="loadMemoryGraph(memoryGraphAgent)"
+          >
+            <template x-for="agent in memoryGraphAgents" :key="agent.name">
+              <option :value="agent.name" x-text="agent.display_name"></option>
+            </template>
+          </select>
+
+          <div
+            class="memory-graph-zoom"
+            x-show="!memoryGraphLoading && !memoryGraphError && memoryGraphNodes.length"
+            @click.stop
+            @mousedown.stop
+            @pointerdown.stop
+          >
+            <svg class="memory-graph-zoom-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="11" cy="11" r="7"/>
+              <path d="m20 20-3.8-3.8"/>
+              <path d="M11 8v6"/>
+              <path d="M8 11h6"/>
+            </svg>
+            <input
+              class="memory-graph-zoom-slider"
+              type="range"
+              min="0.2"
+              max="2.5"
+              step="0.05"
+              :value="memoryGraphZoom"
+              aria-label="缩放图谱"
+              @input="setMemoryGraphZoom($event.target.value)"
+            >
+          </div>
+
+          <button type="button" class="icon-btn" title="刷新图谱" :disabled="memoryGraphLoading" @click="loadMemoryGraph(memoryGraphAgent)">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#ic-refresh"></use></svg>
+          </button>
+
+          <button type="button" class="icon-btn" title="关闭图谱" @click="closeMemoryGraph()">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><use href="#ic-close"></use></svg>
+          </button>
+        </div>
+
+        <div class="memory-graph-stats" aria-label="记忆图谱统计">
+          <div class="memory-graph-stat">
+            <div class="memory-graph-stat-label">Episodes</div>
+            <div class="memory-graph-stat-value" x-text="memoryGraphStats.episode_count || 0"></div>
+          </div>
+          <div class="memory-graph-stat">
+            <div class="memory-graph-stat-label">Understand</div>
+            <div class="memory-graph-stat-value" x-text="memoryGraphStats.understanding_count || 0"></div>
+          </div>
+          <div class="memory-graph-stat">
+            <div class="memory-graph-stat-label">Links</div>
+            <div class="memory-graph-stat-value" x-text="memoryGraphStats.edge_count || 0"></div>
+          </div>
+          <div class="memory-graph-stat">
+            <div class="memory-graph-stat-label">Missing</div>
+            <div class="memory-graph-stat-value" x-text="memoryGraphStats.missing_episode_count || 0"></div>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          class="memory-graph-detail-toggle"
+          :title="memoryGraphDetailCollapsed ? '展开详情' : '收起详情'"
+          :aria-label="memoryGraphDetailCollapsed ? '展开详情侧边栏' : '收起详情侧边栏'"
+          :aria-expanded="!memoryGraphDetailCollapsed"
+          @click="toggleMemoryGraphDetail()"
+        >
+          <svg x-show="!memoryGraphDetailCollapsed" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="m9 18 6-6-6-6"/>
+          </svg>
+          <svg x-show="memoryGraphDetailCollapsed" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#ic-chevron-left"></use></svg>
+        </button>
+
+        <aside class="memory-graph-detail" aria-label="记忆图谱详情" x-show="!memoryGraphDetailCollapsed">
+          <template x-if="memoryGraphSelected">
+            <div class="memory-graph-detail-inner">
+              <template x-if="memoryGraphDetailPrev">
+                <button type="button" class="memory-graph-back-btn" @click="goBackMemoryGraphDetail()">
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#ic-chevron-left"></use></svg>
+                  <span x-text="memoryGraphDetailPrev.selected.title || 'Understanding'"></span>
+                </button>
+              </template>
+              <div class="memory-graph-detail-kicker" x-text="memoryGraphSelected.type_label"></div>
+              <div class="memory-graph-detail-title" x-text="memoryGraphSelected.title"></div>
+              <template x-if="memoryGraphEpisodeFacts().length">
+                <div class="memory-graph-detail-facts">
+                  <template x-for="item in memoryGraphEpisodeFacts()" :key="item">
+                    <span class="memory-graph-detail-fact" x-text="item"></span>
+                  </template>
+                </div>
+              </template>
+
+              <div class="memory-graph-detail-meta">
+                <template x-for="item in memoryGraphMetaPills()" :key="item">
+                  <span class="memory-graph-pill" x-text="item"></span>
+                </template>
+              </div>
+
+              <template x-if="memoryGraphSelected.content">
+                <div class="memory-graph-detail-content" x-text="memoryGraphSelected.content"></div>
+              </template>
+
+              <template x-if="memoryGraphSelected.type === 'understanding' && memoryGraphSelected.history && memoryGraphSelected.history.length">
+                <div>
+                  <div class="memory-graph-section-title">History</div>
+                  <div class="memory-graph-history-list">
+                    <template x-for="(entry, index) in memoryGraphHistoryEntries()" :key="(entry.episode_id || 'history') + '-' + index">
+                      <div class="memory-graph-raw-block memory-graph-diff-block">
+                        <template x-if="entry.episode_id">
+                          <button type="button" class="memory-graph-code-heading memory-graph-episode-link" @click.stop="openEpisodeFromHistory(entry.episode_id)" x-text="memoryGraphHistoryHeading(entry)"></button>
+                        </template>
+                        <template x-if="!entry.episode_id">
+                          <span class="memory-graph-code-heading" x-text="memoryGraphHistoryHeading(entry)"></span>
+                        </template>
+                        <template x-for="(segment, segmentIndex) in entry.diff" :key="segment.type + '-' + segmentIndex">
+                          <span
+                            class="memory-graph-diff-line"
+                            :class="'is-' + segment.type"
+                            x-text="segment.text"
+                          ></span>
+                        </template>
+                      </div>
+                    </template>
+                  </div>
+                </div>
+              </template>
+
+              <template x-if="memoryGraphSelected.type === 'edge' && memoryGraphEdgeDiffSegments().length">
+                <div>
+                  <div class="memory-graph-section-title">Diff</div>
+                  <pre class="memory-graph-raw-block memory-graph-diff-block"><span class="memory-graph-code-heading" x-text="memoryGraphHistoryHeading(memoryGraphSelected.history_entry)"></span><template x-for="(segment, segmentIndex) in memoryGraphEdgeDiffSegments()" :key="segment.type + '-' + segmentIndex"><span
+                        class="memory-graph-diff-line"
+                        :class="'is-' + segment.type"
+                        x-text="segment.text"
+                      ></span></template></pre>
+                </div>
+              </template>
+
+              <template x-if="memoryGraphSelected.raw_dialogue_preview">
+                <div>
+                  <div class="memory-graph-section-title">Raw</div>
+                  <pre class="memory-graph-raw-block" x-text="memoryGraphSelected.raw_dialogue_preview"></pre>
+                </div>
+              </template>
+            </div>
+          </template>
+
+          <template x-if="!memoryGraphSelected">
+            <div class="memory-graph-empty">选择一个节点或连线查看详情。</div>
+          </template>
+        </aside>
+    </div>
+  </div>
+
+  <div class="toast-stack" aria-live="polite">
+    <template x-for="toast in toasts" :key="toast.id">
+      <div class="toast" :class="toast.tone ? `tone-${toast.tone}` : ''" x-text="toast.message"></div>
+    </template>
+  </div>
+</div>
+
+<script src="/static/worldline.js?v=1"></script>
+<script src="/static/search.js?v=1"></script>
+<script src="/static/chat.js?v=1"></script>
+<script src="/static/app.js?v=chat-split"></script>
+</body>
+</html>
