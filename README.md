@@ -4,224 +4,256 @@
   <img src="assets/deeprole-logo.png" alt="DeepRole 界面预览" width="760">
 </p>
 
-DeepRole 是一个开放世界多 Agent 角色扮演 / 叙事游戏系统。
-DeepRole is an open-world multi-agent roleplay / narrative game system.
+DeepRole 是一个开放世界多 Agent 角色扮演 / 叙事引擎。玩家和角色生活在同一个会持续变化的游戏世界里：你可以自由行动、主动找人、离开当前场景、跳过时间、改变关系走向；角色会根据自己的性格、目标和已经经历过的事情作出回应。
 
-玩家和角色生活在同一个会持续变化的游戏世界里。你可以自由行动、主动找人、离开当前场景、跳过时间、改变关系走向；角色会根据自己的性格、目标和已经经历过的事情作出回应。
-Players and characters inhabit the same living world that changes over time. You can act freely — seek out people, leave scenes, skip time, and shift relationships. Characters respond based on their own personalities, goals, and everything that has happened to them so far.
+引擎的核心目标是 **「每次游玩都生成一条不一样的故事线」** —— 即使是同一个角色，也会因为遇到的玩家不同、经历的事件不同、被对待的方式不同，慢慢展现出不一样的面貌。
 
-DeepRole 最核心的目标是：**每次游玩都生成一条不一样的故事线**。即使是同一个角色，也会因为遇到的玩家不同、经历的事件不同、被对待的方式不同，慢慢展现出不一样的面貌。
-The core goal of DeepRole is: **every playthrough generates a different story**. Even the same character will gradually reveal a different side of themselves depending on who they meet, what they experience, and how they are treated.
+当前承载的示例剧本是 **《Partial · 偏心》**：现代职场双女主恋爱故事，玩家以产品经理身份入职，与 UI 设计师江知夏、研发总监顾明汐在跨部门协作中逐渐失衡、靠近、确认。
 
-## 项目特点 / Features
+---
 
-### 开放世界式推进 / Open-World Progression
+## 为什么要做这个项目
 
-玩家不需要沿着固定剧情树走。你可以在当前场景里继续对话，也可以转身离开、给别人发消息、去另一个地点、等待到晚上、临时改变计划。系统会根据当前世界状态接住这些行动，并把故事推进到新的场景。
-You don't need to follow a fixed story tree. You can keep talking in the current scene, walk away, message someone else, move to another location, wait until night, or change your mind entirely. The system catches these actions from current world state and moves the story forward.
+传统 AI-BOT 角色扮演游戏有几个绕不开的痛点，玩家通常在 20 轮左右的对话后流失：
 
-开放世界在这里指叙事自由度：玩家的行动可以改变谁在场、谁知道了什么、下一幕发生在哪里，以及角色之后会不会主动来找你。
-Open-world here means narrative freedom: your choices change who is present, who knows what, where the next scene happens, and whether a character will come looking for you later.
+1. **长对话失忆** —— 角色记不住早先发生过的事，对话越长越"断层"。
+2. **多角色串台** —— 几个角色共用一段上下文，互相知道不该知道的事，人设混在一起。
+3. **剧情无推进** —— 永远是"玩家说一句、角色回一句"的纯闲聊，没有目的地。
 
-### 自主生成角色 / Dynamic Character Generation
+市面上的解法多是"把上下文窗口塞得更大、把人设 prompt 写得更长"。DeepRole 认为 **问题不在上下文长度，而在结构**：记忆、信息流、推进节奏如果都靠 LLM 即兴处理，再多 token 也撑不住长线故事。所以这个项目从架构上重新设计这三个维度：
 
-故事可以从初始模板继续扩展。当剧情需要出现新的长期人物时，系统会生成新的角色，并给他/她建立姓名、身份、目标、说话方式、当前状态、关系视角和日常行动轨迹。
-Stories can grow beyond the initial template. When the plot calls for a new recurring character, the system generates them — giving them a name, identity, goals, speech style, current state, relationship perspective, and behavioral patterns.
+- **记忆** 用分层压缩 + 精准召回，而不是整段历史塞进上下文。
+- **信息** 按 `visible_to` 在角色间隔离，而不是所有人共享一段对话。
+- **推进** 由导演 Agent + 系统议程双驱动，而不是只等玩家发话。
 
-进入主要关系网络的新角色会继续参与后续剧情，拥有自己的记忆和变化。
-New characters who enter the main relationship network persist in the story, accumulating their own memories and changes over time.
+下面这些设计都是围绕这三个问题展开的。
 
-### 经历会改变角色 / Characters Are Shaped by Experience
+---
 
-角色不会只停留在初始人设里。一次冲突、一次承诺、一句被记住的话、一次没有赴约，都会进入角色之后的判断。
-Characters don't stay locked in their initial profile. A conflict, a promise, a line they remember, a missed appointment — all of it feeds into how they judge things going forward.
+## 设计特点
 
-同一个角色在不同世界线里可能变得更信任你、更疏远你、更依赖你，也可能因为某些经历改变对其他角色的看法。角色的"感觉"来自一路发生过的事情，并持续越过开局设定。
-The same character may grow more trusting, more distant, or more dependent depending on the worldline. Their "feel" comes from accumulated experience, not just their starting setup.
+### 1. 导演 Agent 路由 + 用户输入与系统议程双驱动
 
-### 角色有独立视角 / Characters Have Independent Perspectives
+每一轮不是"玩家讲话 → 角色回话"，而是先跑一个 **narrator（旁白）Agent**：它不替角色说话，只决定这一轮**谁能看见并回应**（`targets`）、时间地点在场、场景转换、是否引入新角色。随后各角色**顺序**回应，每人写回历史后下一个才能读到——信息按在场关系轮流扩散。
 
-每个角色都有自己的记忆和判断。角色知道的事情取决于他/她是否在场、是否收到了消息、是否被别人告知。某个角色背后发生的事，不会自动同步给所有人。
-Each character has their own memory and judgment. What they know depends on whether they were present, whether they received a message, whether someone told them. What happens behind a character's back is not automatically shared with everyone.
+推进机制是双驱动的：
 
-这种信息差会自然制造误会、秘密、试探和补救空间。玩家可以选择坦白、隐瞒、拖延、解释，也可以利用角色之间知道的信息不同来推动剧情。
-This information asymmetry naturally creates misunderstandings, secrets, tests, and room to repair things. You can choose to confess, hide, delay, or explain — and you can use what different characters know to steer the story.
+- **用户输入**驱动玩家主动行为。
+- **系统议程**驱动世界自己往前走：`state_updater` 维护 `world_schedule`（世界日程）与 `pending_events`（从角色"打算"同步来的待触发事件队列）。时间到了、或某个角色"打算去找玩家"的条件成立时，系统会主动推进到下一幕，而不是等玩家再发一条消息。
 
-### 关系网络会自己长出来 / A Relationship Web That Grows on Its Own
+效果是：你可以一整天不找某个角色，但她真的会自己来找你。
 
-主要角色之间也会形成印象、比较、信任、嫉妒、合作或回避。玩家的选择会影响这些关系，角色之间的关系也会反过来影响玩家的处境。
-Major characters form impressions of each other, compare, trust, feel jealous, cooperate, or avoid one another. Your choices shape these relationships, and those relationships feed back into your situation.
+### 2. 信息不对称（visible_to）
 
-当故事推进得足够久，世界会从"几个角色和玩家聊天"变成一张逐渐复杂的人际网络。
-As the story progresses, the world shifts from "a few characters chatting with the player" into a gradually more complex social network.
+每条历史消息都带 `visible_to` 字段，角色读取上下文时**按在场关系过滤**。不在场的人不知道这轮发生了什么。
 
-### 适合慢热游玩 / Built for Long-Term Play
+这不是靠在 prompt 里写"角色 A 不应该知道 X"，而是在数据层就让 A 看不到那条消息。结果自然产出误会、秘密、试探、补救空间：你可以坦白、隐瞒、拖延、解释，也可以利用角色之间知道的信息不同来推动剧情。
 
-DeepRole 更适合把角色当作会长期相处的人来玩。短期内可以看见角色回应差异，长期游玩时更能看到记忆、关系和人格变化带来的细微差别。
-DeepRole is best experienced by treating characters as people you'll spend real time with. Response differences show up quickly, but the subtle shifts in memory, relationship, and personality take longer to emerge.
+这是 DeepRole 相对普通聊天框架最独特的地方——**人设不是靠提示词约束的，而是靠信息可达性塑造的**。
 
-## 如何使用 / How to Use
+### 3. 角色认知四层
 
-### 1. 本地启动 / Local Setup
+| 层 | 载体 | 作用 |
+|----|------|------|
+| **Soul** | `soul.md`（identity / goal / past / habits / reactions / voice 六段） | 只读人设，本轮不变 |
+| **status** | `status.md`（prose fields） | 心境、在意的事、关系，每轮回写 |
+| **EpisodeMemory** | `memory.jsonl` | 一事件一条，带 date / participants / keywords / importance / raw_dialogue 等结构化字段 |
+| **Understanding** | `understanding.jsonl` | 从事件沉淀出的**稳定信念 / 互动模式**，带 history 记录内容演变 |
 
-安装依赖：
-Install dependencies:
+人设不会因为一场对话就崩——它在 Soul 里是只读的；但角色也不会停在初始设定里——每次冲突、承诺、失约都会进 EpisodeMemory，再被后台压缩成 Understanding，影响后续判断。同一个角色在不同世界线里可能变得更信任你、更疏远你、更依赖你，这种感觉来自一路发生过的事，而非开局人设。
 
-```bash
-uv sync
+### 4. 混合记忆检索
+
+单轮记忆召回走一条完整管线：
+
+```
+向量语义候选  +  BM25 词面候选  →  hybrid 融合  → (可选) rerank 精排
+→ 叠加 recency 指数衰减(游戏内日期 + recall 双信号) + importance 权重
+→ 回写 last_recalled_at
 ```
 
-复制环境变量模板：
-Copy the environment template:
+- 向量库是本地 **sqlite-vec**，零外部依赖。
+- recency 用**游戏内日期**而非墙钟时间，半衰期可配；配合 importance 权重，让"重要的旧事"不会单纯因为时间久就被遗忘。
+- BM25 用 jieba 分词，hybrid 默认 75% 向量 / 25% 词面，兼顾语义相似和关键词命中。
+
+效果：上下文窗口里不必常驻全部历史，老的对话被压成结构化事件，召回时按相关性 + 时间近度取——同等窗口下能承载更长故事弧线。
+
+### 5. 后台记忆整理 consolidation
+
+每轮结束，`detect_and_consolidate` 与 state_updater 并行后台运行：
+
+- **EpisodeClosureDetector** 扫描谁有可结的剧情弧段（一个事件弧没落、或被新事件覆盖）。
+- 阈值到了的角色并行跑 **EpisodeMemoryGenerator**：切片 draft + 原始对话 → 生成一条结构化 EpisodeMemory 追加进 `memory.jsonl`，顺便 patch Understanding（带 history 演变记录、回链 episode id）、同步向量索引。
+
+整理在后台异步进行，玩家不必等它结束才能继续——这是"长线游玩不卡顿"的关键。
+
+### 6. 开放世界推进 + 动态角色孵化
+
+玩家不需要沿固定剧情树走。你可以在当前场景继续对话，也可以转身离开、给别人发消息、去另一个地点、等到晚上、临时改计划。系统会根据当前世界状态接住这些行动。
+
+当剧情需要新长期人物时，narrator 会向 **`character_factory`** 提出带关系锚点的请求，自动生成新角色的 soul / status / memory 并加入本轮。进入主要关系网络的新角色会持续参与后续剧情，拥有自己的记忆和变化。
+
+### 7. 不可变世界线存档
+
+存档是**不可变节点 zip**，父子关系只存 metadata。读取会从某个节点分出新分支，不会覆盖原节点。世界线页面按故事分 tab 展示存档树，能看到同一分支和分叉点。
+
+建议在关键关系节点前存档：表白、摊牌、分别、冲突升级、引入新角色之前。想看角色变化时，不要频繁重开——让同一条世界线多走一段。
+
+### 8. 四层分层架构（AST 守依赖）
+
+```
+models/        ← 纯领域（实体 + 值对象 + 规则，零 I/O）
+repository/    ← 基础设施（文件 / sqlite-vec / LLM 客户端 / 日志）
+app/           ← 用例层（单轮编排 + agent 装配 + LLM DTO）
+server.py      ← 投递层（FastAPI / SSE）
+```
+
+`tests/test_layer_dependencies.py` 用 AST 静态守这条依赖方向，任何反向 import 会让测试直接失败——让"领域规则不污染 I/O、I/O 不反依赖用例"能长期不腐烂。所有结构化输出走 pydantic-ai `PromptedOutput`，DTO 在 app/ 解包成 primitive 再喂 repo，repo 永远不 import app/。
+
+---
+
+## 项目结构
+
+```
+DeepRole/
+├── models/              # 领域实体（Character / EpisodeMemory / Understanding...）
+├── repository/          # 基础设施（文件、sqlite-vec、LLM/embedding/rerank 客户端、日志）
+├── app/                 # 用例层（conversation / narrator / consolidation / memory / character_factory）
+├── prompts/             # LLM prompt 资源
+├── data/templates/      # 故事模板（当前：modern / Partial·偏心）
+│   └── modern/
+│       ├── narrator/    # 旁白 soul + status + tasks（剧情种子）
+│       ├── chenxiao/     # 江知夏 soul/status/intents/memory_draft
+│       └── guyining/     # 顾明汐 soul/status/intents/memory_draft
+├── static/              # 前端（Alpine.js SPA + Anthropic 风格 CSS）
+├── server.py            # FastAPI 投递层 + SSE
+├── config.toml          # 行为配置（记忆权重、历史阈值、温度等）
+└── .env.example         # 模型 / embedding / rerank 配置模板
+```
+
+---
+
+## 快速开始
+
+### 1. 环境与依赖
+
+需要 Python ≥ 3.11。可用 `uv` 或 `conda` 二选一：
+
+```bash
+# 方式 A：uv（项目原生）
+uv sync
+
+# 方式 B：conda（无 uv 时）
+conda create -n deeprole python=3.12 -y
+conda activate deeprole
+pip install "pydantic-ai==1.79.0" openai python-dotenv tiktoken httpx jieba \
+            sqlite-vec aiosqlite fastapi uvicorn pydantic-settings asyncpg bcrypt sseclient
+```
+
+### 2. 配置模型服务
 
 ```bash
 cp .env.example .env
 ```
 
-打开 `.env`，填入模型服务配置。最少需要：
-Open `.env` and fill in your model configuration. Minimum required:
+打开 `.env`，填入模型配置。最少需要主对话模型与 embedding 服务：
 
 ```bash
-LLM_API_URL=your-llm-api-url
-LLM_API_KEY=your-llm-api-key
-LLM_MODEL_ID=deepseek-v4-pro  # 建议使用 deepseek 模型，在角色扮演上表现好。如果你有其他模型也可以使用。
-                               # DeepSeek models work well for roleplay. Other models work too.
+LLM_PROVIDER=openai                       # 任意 OpenAI 兼容端点填 openai + LLM_API_URL
+LLM_API_URL=https://api.siliconflow.cn/v1 # 自定义端点；走官方 api.openai.com 则留空
+LLM_API_KEY=your-api-key
+LLM_MODEL_ID=deepseek-ai/DeepSeek-V4-Flash  # 角色扮演表现好的便宜模型；亦可换其他
+
+EMBEDDING_API_URL=https://api.siliconflow.cn/v1/embeddings
+EMBEDDING_MODEL=BAAI/bge-m3
+EMBEDDING_API_KEY=your-embedding-key        # 与 LLM 同源时可复用同一个 key
+
+RERANK_MODEL=BAAI/bge-reranker-v2-m3       # 可选；不配则跳过精排
+RERANK_API_URL=https://api.siliconflow.cn/v1/rerank
+RERANK_API_KEY=your-rerank-key             # 与 LLM 同源时可复用同一个 key
 ```
 
-如果使用其他 OpenAI-compatible 模型服务，按 `.env.example` 里的注释调整 URL 和模型名。
-For other OpenAI-compatible model services, adjust the URL and model name per the comments in `.env.example`.
+支持 provider：`openai`（含任意 OpenAI 兼容端点）/ `google` / `anthropic` / `deepseek`。详细字段见 `.env.example` 注释。
 
-启动：
-Start the server:
+### 3. 启动
 
 ```bash
+# uv
 uv run uvicorn server:app
+
+# conda
+python -m uvicorn server:app
 ```
 
-然后打开：
-Then open:
+打开 http://localhost:8000 ，选择故事模板即可开始。
 
-```text
-http://localhost:8000
-```
+---
 
-### 2. 开始游玩 / Starting a Story
+## 开始游玩
 
 进入页面后选择一个故事模板：
-On the page, choose a story template:
 
-- `modern`：现代都市恋爱故事，初始双女主为江知夏和顾明汐。
-  `modern`: Modern urban romance story, starting with two heroines: Jiang Zhixia and Gu Mingxi.
+- **`modern`（不期而遇）** —— 现代都市恋爱，初始双女主为江知夏（UI 设计师）和顾明汐（研发总监），玩家以产品经理身份入职，三人因跨部门协作被拉到一起。
 
 选择故事后，直接在输入框里说话或描述行动即可。
-After choosing a story, just type dialogue or describe actions in the input box.
 
-你可以输入台词：
-You can type dialogue:
+**台词**：
 
 ```text
 "你今天看起来有点累，要不要一起去天台吹会儿风？"
-"You look tired today. Want to go up to the roof and get some air?"
 ```
 
-也用括号表示动作：
-Use parentheses for actions:
+**动作**（用括号表示）：
 
 ```text
 （把手机扣在桌上，假装没看到那条消息）
-(Turn the phone face-down on the desk, pretending not to have seen the message)
 ```
 
-也可以主动改变场景：
-Change the scene:
+**改变场景 / 跳过时间**：
 
 ```text
-（去找美月）
-(Go find Mitsuki)
-```
-
-或者跳过时间：
-Skip time:
-
-```text
+（去找江知夏）
 （等到晚上十点，给江知夏发消息）
-(Wait until 10 PM and message Jiang Zhixia)
 ```
 
-### 3. 和角色互动 / Interacting with Characters
+每轮角色回应后，页面会在后台生成几个**可选行动**；选项没出现时也可以直接输入。你可以点选项继续，也可以自己输入完全不同的内容——输入框永远可用。
 
-每轮角色回应后，页面会在后台生成几个可选行动；选项还没出现时也可以直接输入。你可以点击选项继续，也可以自己输入完全不同的内容。
-After each round of character responses, the page generates a few suggested actions in the background. You can tap a suggestion or type something entirely different — the input box is always available.
+### 观察模式
 
-角色创建后，输入区会出现「旁观」开关。开启后可以输入想观察的角色名，系统会布置一个没有玩家入场的场景，让在场角色自然互动；旁观轮不会生成玩家行动选项。
-Once characters are created, an **Observe** toggle appears in the input area. Enable it and name the characters you want to watch — the system will stage a scene without the player present and let the characters interact naturally. Observation rounds do not generate player action suggestions.
+角色创建后，输入区会出现 **观察** 开关。开启后输入想观察的角色名，系统会布置一个**没有玩家入场**的场景，让在场角色自然互动；观察轮不会生成玩家行动选项。适合用来"看角色自己怎么演"。
 
-如果想推动开放世界体验，可以多尝试：
-To get the most out of the open-world experience, try:
+### 推动开放世界体验
 
-- 指定想找谁。
-  Naming who you want to find.
-- 说明自己要去哪里。
-  Stating where you're headed.
+想看到 DeepRole 的差异，可以多尝试：
+
+- 指定想找谁、说明自己要去哪里。
 - 明确是当面说、发消息、打电话，还是只在心里想。
-  Specifying whether you're speaking in person, sending a message, calling, or just thinking.
 - 让角色之间产生交集，例如邀请两个人同时出现。
-  Creating intersections between characters, like inviting two people to the same place.
-- 做一些会留下后果的选择，例如失约、隐瞒、道歉、承诺、公开关系。
-  Making choices that leave consequences — breaking a promise, hiding something, apologizing, committing to something, or going public with a relationship.
+- 做一些会留下后果的选择：失约、隐瞒、道歉、承诺、公开关系。
 
-这些行为会影响角色知道什么、记住什么，以及之后如何对待你。
-These actions shape what characters know, what they remember, and how they treat you going forward.
+这些行为会改变角色知道什么、记住什么，以及之后如何对待你。想看角色变化时，不要频繁重开——让同一条世界线多走一段。
 
-### 4. 生成新角色 / Generating New Characters
+### 存档与世界线
 
-当故事需要新角色时，系统会自动生成。
-The system generates new characters automatically when the story calls for them.
+页面提供统一的档案抽屉和世界线页面，用不可变节点管理存档：
 
-例如：
-For example:
-
-```text
-你之前说的那个社团前辈，今天也会来吗？
-Is the senior from the club you mentioned going to be there today?
-```
-
-如果这个人物适合进入主要关系网，系统会自动创建角色，并让他/她在后续剧情中继续存在。
-If this character fits into the main relationship network, the system creates them and keeps them present in subsequent scenes.
-
-### 5. 存档、读档和重开 / Saving, Loading, and Resetting
-
-页面提供统一的档案抽屉和世界线页面，用不可变节点管理存档、读档和重开。
-The page has a unified archive drawer and a worldline view, managing saves as immutable nodes.
-
-- **新建存档**：生成一个新的世界线节点。若当前进度来自旧存档，新节点会挂在旧节点下方。
-  **New Save**: Creates a new worldline node. If the current session came from a previous save, the new node branches off from it.
-- **世界线**：按故事世界观分 tab 展示存档树，能看到同一分支和从哪个节点开始分叉。
-  **Worldline**: Shows the save tree by story, letting you see branches and where they diverged.
-- **读取**：恢复过去的世界线节点。之后继续保存，会从该节点分出新分支。
-  **Load**: Restores a past worldline node. Saving afterward branches from that point.
-- **删除**：可以删除整个 Game，也可以单独删除没有子分支的叶子存档节点。
-  **Delete**: Delete an entire game tree, or just a leaf node with no children.
+- **新建存档**：生成一个新的世界线节点；若当前进度来自旧存档，新节点会挂在旧节点下方。
+- **世界线**：按故事分 tab 展示存档树，能看到同一分支和从哪个节点分叉。
+- **读取**：恢复过去的世界线节点；之后继续保存会从该节点分出新分支。
+- **删除**：可删整个 Game，也可删没有子分支的叶子节点。
 - **重开**：清空当前进度，从故事模板重新开始。
-  **Reset**: Wipes current progress and restarts from the story template.
 
-建议在关键关系节点前存档，例如表白、摊牌、分别、冲突升级、引入新角色之前。
-Save before significant relationship moments — a confession, a confrontation, a parting, an escalating conflict, or the introduction of a new character.
+---
 
-### 6. 回看历史 / Reviewing History
+## 技术栈
 
-页面顶部的搜索按钮可以展开历史搜索框，搜索消息内容并跳到匹配回合；历史按钮仍可按游戏内日期跳回旧回合。长线游玩时，可以用它找回早先的约定、误会或角色提到过的细节。
-The search button at the top expands a history search bar — search message content and jump to the matching turn. The history button still lets you jump back by in-game date. For long playthroughs, use these to revisit earlier promises, misunderstandings, or details a character mentioned in passing.
+- **后端**：FastAPI + pydantic-ai（PromptedOutput 结构化输出）+ aiosqlite / sqlite-vec
+- **记忆**：本地 sqlite-vec 向量库 + BM25（jieba 分词）+ 可选 rerank
+- **前端**：Alpine.js SPA + Anthropic 风格视觉系统（暖米 `#ECE9E0` + 克制橙 `#D97757` + Lora/Poppins + 霞鹜文楷）
+- **模型**：任意 OpenAI 兼容端点（DeepSeek / SiliconFlow / OpenAI / Anthropic / Google ...）
 
-### 7. 推荐玩法 / Tips for Better Play
+---
 
-- 把输入框当成"台词 + 行动 + 意图"的混合输入。
-  Treat the input box as a blend of dialogue, action, and intent.
-- 不必每次都解释完整背景，角色会根据已经发生过的事理解你。
-  You don't need to re-explain context every time — characters understand you through what has already happened.
-- 想制造信息差时，明确说明谁在场、谁没听见、消息发给了谁。
-  When you want information asymmetry, be explicit about who was present, who didn't hear, and who received a message.
-- 想让关系推进时，给角色留下可回应的情绪或选择。
-  To move a relationship forward, leave the character with an emotion or decision to respond to.
-- 想看角色变化时，不要频繁重开；让同一条世界线多走一段。
-  To see a character change, don't reset often — let the same worldline run long enough.
+## License
+
+MIT
