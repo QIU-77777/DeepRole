@@ -1,7 +1,7 @@
 # DeepRole
 
 <p align="center">
-  <img src="assets/deeprole-logo.png" alt="DeepRole logo" width="520">
+  <img src="assets/deeprole-logo.png" alt="DeepRole 界面预览" width="760">
 </p>
 
 DeepRole 是一个开放世界多 Agent 角色扮演 / 叙事游戏系统。
