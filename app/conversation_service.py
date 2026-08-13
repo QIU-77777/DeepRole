@@ -29,16 +29,12 @@ class ConversationService:
         character: Character,
         user_input: str,
         raw_messages: list[dict] | None = None,
-        *,
-        observation_mode: bool = False,
     ) -> LLMCharacterOutput:
         """搜记忆 → 构建 prompt → 运行 SDK → 写回文件，返回 LLMCharacterOutput。"""
         if raw_messages is None:
             raw_messages = load_conversation_history(turns=HISTORY_RAW_SCAN_TURNS)
 
-        user_message = self._build_prompt(
-            character, user_input, raw_messages, observation_mode=observation_mode
-        )
+        user_message = self._build_prompt(character, user_input, raw_messages)
         config = get_llm_config()
         output = await run_app_agent(
             get_conversation_agent(character.name),
@@ -56,8 +52,6 @@ class ConversationService:
         character: Character,
         user_input: str,
         raw_messages: list[dict],
-        *,
-        observation_mode: bool = False,
     ) -> str:
         """组装角色 user message（含记忆与长期判断召回前缀）。"""
         name = character.name
@@ -101,7 +95,6 @@ class ConversationService:
             memories_block,
             understandings_prefix=understandings_block,
             raw_messages=raw_messages,
-            observation_mode=observation_mode,
         )
         return message
 

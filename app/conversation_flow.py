@@ -81,17 +81,12 @@ async def run_agent_in_scene(
     agent_name: str,
     targets: list[str],
     user_input: str,
-    *,
-    observation_mode: bool = False,
-    narrator_output: LLMNarratorOutput | None = None,
 ) -> str | None:
     """在场景上下文中运行单个角色并广播响应。"""
     from repository.message_router import message_router
 
-    scene_json = narrator_output.model_dump_json() if narrator_output else ""
-    query = scene_json if observation_mode else user_input
     character = character_repo.load(agent_name)
-    output = await conversation_service.run_turn(character, query, observation_mode=observation_mode)
+    output = await conversation_service.run_turn(character, user_input)
     response = clean_response(output.content)
     if is_valid_response(response, agent_name):
         await message_router.broadcast_agent_response(agent_name, targets, response)

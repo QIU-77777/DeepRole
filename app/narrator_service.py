@@ -10,7 +10,6 @@ import re
 
 from app.agent_factory import (
     get_conversation_agent,
-    get_observation_narrator_agent,
     get_state_updater_agent,
 )
 from app.llm_schema import LLMNarratorOutput, LLMNewCharacterRequest, LLMStateUpdate
@@ -43,8 +42,6 @@ class NarratorService:
         self,
         user_input: str,
         raw_messages: list[dict] | None = None,
-        *,
-        observation_mode: bool = False,
     ) -> tuple[LLMNarratorOutput | None, bool]:
         """运行 narrator → 返回 (清洗后的结构化输出, is_valid)。
 
@@ -60,7 +57,6 @@ class NarratorService:
             output = await self._run_narrator(
                 user_input,
                 raw_messages,
-                observation_mode=observation_mode,
                 output_validator=lambda o: self._validate_route_output(o, valid_agents),
             )
         except asyncio.TimeoutError as e:
@@ -85,7 +81,7 @@ class NarratorService:
         is_valid = is_valid_response(output.scene_description, "narrator") and bool(
             output.targets or output.new_characters
         )
-        if is_valid and not observation_mode:
+        if is_valid:
             self._write_scene(output)
         return output, is_valid
 
@@ -156,15 +152,12 @@ class NarratorService:
         user_input: str,
         raw_messages: list[dict],
         *,
-        observation_mode: bool = False,
         output_validator=None,
     ) -> LLMNarratorOutput:
         """构建 prompt → 运行 narrator SDK，返回 LLMNarratorOutput。"""
-        user_message, _ = build_user_message(
-            _NAME, user_input, "", raw_messages=raw_messages, observation_mode=observation_mode
-        )
+        user_message, _ = build_user_message(_NAME, user_input, "", raw_messages=raw_messages)
         config = get_llm_config()
-        sdk = get_observation_narrator_agent() if observation_mode else get_conversation_agent(_NAME)
+        sdk = get_conversation_agent(_NAME)
         return await run_app_agent(
             sdk,
             user_message,

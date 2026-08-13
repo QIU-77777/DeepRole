@@ -392,7 +392,7 @@
                           <span class="speaker-dot" :style="`background:${message.color};`"></span>
                           <span class="speaker-label" x-text="message.author"></span>
                         </div>
-                        <div class="message-card markdown-body" x-html="message.html" :style="`background:${message.background};border-color:${message.border};`"></div>
+                        <div class="message-card markdown-body" x-html="message.html" :style="`background:${message.background};border-color:${message.border};--agent-color:${message.color};`"></div>
                       </div>
                     </template>
 
@@ -402,7 +402,7 @@
                           <span class="speaker-label" x-text="message.author"></span>
                           <span class="speaker-dot" :style="`background:${message.color};`"></span>
                         </div>
-                        <div class="message-card markdown-body" x-html="message.html" :style="`background:${message.background};border-color:${message.border};`"></div>
+                        <div class="message-card markdown-body" x-html="message.html" :style="`background:${message.background};border-color:${message.border};--agent-color:${message.color};`"></div>
                       </div>
                     </template>
                   </article>
@@ -419,6 +419,35 @@
                 </div>
               </article>
             </template>
+
+          <section class="choice-rail" x-show="shouldShowChoices()">
+            <div class="choice-rail-head">
+              <div class="choice-rail-title">建议行动</div>
+              <div class="choice-rail-subtitle" x-text="choiceRailSubtitle()"></div>
+            </div>
+
+            <div class="choice-list" x-show="choices.length > 0">
+              <template x-for="choice in choices" :key="choice">
+                <button type="button" class="choice-chip" @click="submitMessage(choice)">
+                  <span class="choice-chip-text" x-text="choice"></span>
+                </button>
+              </template>
+            </div>
+
+            <div class="choice-state loading" x-show="choiceStatus === 'loading'" aria-live="polite">
+              <span class="choice-state-bars" aria-hidden="true">
+                <span></span>
+                <span></span>
+                <span></span>
+              </span>
+              <span>正在生成建议行动</span>
+            </div>
+
+            <div class="choice-state" x-show="choiceStatus === 'empty'" aria-live="polite">
+              当前无建议行动，你可以直接输入下一句。
+            </div>
+          </section>
+
           </div>
 
           <div class="latest-jump-row" x-show="shouldShowJumpLatest()" x-transition.opacity>
@@ -437,64 +466,13 @@
           </div>
         </div>
 
-        <section class="choice-rail" x-show="shouldShowChoices()">
-          <div class="choice-rail-head">
-            <div class="choice-rail-title">建议行动</div>
-            <div class="choice-rail-subtitle" x-text="choiceRailSubtitle()"></div>
-          </div>
-
-          <div class="choice-list" x-show="choices.length > 0">
-            <template x-for="choice in choices" :key="choice">
-              <button type="button" class="choice-chip" @click="submitMessage(choice)">
-                <span class="choice-chip-text" x-text="choice"></span>
-              </button>
-            </template>
-          </div>
-
-          <div class="choice-state loading" x-show="choiceStatus === 'loading'" aria-live="polite">
-            <span class="choice-state-bars" aria-hidden="true">
-              <span></span>
-              <span></span>
-              <span></span>
-            </span>
-            <span>正在生成建议行动</span>
-          </div>
-
-          <div class="choice-state" x-show="choiceStatus === 'empty'" aria-live="polite">
-            当前无建议行动，你可以直接输入下一句。
-          </div>
-        </section>
-
         <section class="composer-shell">
           <div class="composer-head">
             <div class="composer-head-left">
               <div class="composer-title">你的行动</div>
-              <div
-                class="observe-switch-wrap"
-                :class="{ on: observeMode }"
-                x-show="messages.length > 0 && characterCount > 0"
-                @click="observeMode = !observeMode"
-                role="switch"
-                :aria-checked="observeMode"
-                tabindex="0"
-                @keydown.space.prevent="observeMode = !observeMode"
-                @keydown.enter.prevent="observeMode = !observeMode"
-              >
-                <span class="observe-switch-copy">
-                  <span class="observe-switch-label">观察模式</span>
-                  <span
-                    class="observe-info-badge"
-                    data-tooltip="观察此时角色在做什么，玩家不参与互动"
-                    aria-label="观察此时角色在做什么，玩家不参与互动"
-                  >i</span>
-                </span>
-                <div class="observe-switch-track">
-                  <div class="observe-switch-thumb"></div>
-                </div>
-              </div>
             </div>
             <div class="composer-tools">
-              <div class="composer-hint" x-text="observeMode ? '输入想观察的角色，Enter 发送' : 'Enter 发送，Shift + Enter 换行'"></div>
+              <div class="composer-hint" x-text="'Enter 发送，Shift + Enter 换行'"></div>
             </div>
           </div>
 
@@ -506,7 +484,7 @@
                 x-model="inputText"
                 rows="1"
                 :disabled="busy"
-                :placeholder="observeMode ? '输入想观察的角色名…' : '输入你想说的话和动作，用括号表示动作，例如「早上好（挥手）」'"
+                :placeholder="'输入你想说的话和动作，用括号表示动作，例如「早上好（挥手）」'"
                 @input="handleComposerInput($event)"
                 @focus="handleComposerFocus()"
                 @blur="handleComposerBlur()"

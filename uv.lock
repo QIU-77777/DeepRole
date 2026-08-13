@@ -26,74 +26,6 @@ wheels = [
 ]
 
 [[package]]
-name = "agentgal"
-version = "0.1.0"
-source = { virtual = "." }
-dependencies = [
-    { name = "aiosqlite" },
-    { name = "asyncpg" },
-    { name = "bcrypt" },
-    { name = "fastapi" },
-    { name = "httpx" },
-    { name = "jieba" },
-    { name = "openai" },
-    { name = "pydantic-ai" },
-    { name = "pydantic-settings" },
-    { name = "python-dotenv" },
-    { name = "sqlite-vec" },
-    { name = "sseclient" },
-    { name = "tiktoken" },
-    { name = "uvicorn" },
-]
-
-[package.optional-dependencies]
-dev = [
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "pytest-mock" },
-]
-local-vec = [
-    { name = "aiosqlite" },
-    { name = "sqlite-vec" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "aiosqlite", specifier = ">=0.22.1" },
-    { name = "aiosqlite", marker = "extra == 'local-vec'", specifier = ">=0.22.1" },
-    { name = "asyncpg", specifier = ">=0.30.0" },
-    { name = "bcrypt" },
-    { name = "fastapi", specifier = ">=0.116.0" },
-    { name = "httpx", specifier = ">=0.27" },
-    { name = "jieba", specifier = ">=0.42.1" },
-    { name = "openai", specifier = ">=1.0" },
-    { name = "pydantic-ai", specifier = ">=1.79.0" },
-    { name = "pydantic-settings", specifier = ">=2.11.0" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.24" },
-    { name = "pytest-mock", marker = "extra == 'dev'", specifier = ">=3.14" },
-    { name = "python-dotenv", specifier = ">=1.0" },
-    { name = "sqlite-vec", specifier = ">=0.1.6" },
-    { name = "sqlite-vec", marker = "extra == 'local-vec'", specifier = ">=0.1.6" },
-    { name = "sseclient" },
-    { name = "tiktoken", specifier = ">=0.7" },
-    { name = "uvicorn", specifier = ">=0.35.0" },
-]
-provides-extras = ["local-vec", "dev"]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "pytest", specifier = ">=9.0.2" },
-    { name = "pytest-asyncio", specifier = ">=1.3.0" },
-]
-
-[[package]]
 name = "aiofile"
 version = "3.9.0"
 source = { registry = "https://pypi.org/simple" }
@@ -685,14 +617,14 @@ name = "cohere"
 version = "6.0.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "fastavro", marker = "sys_platform != 'emscripten'" },
-    { name = "httpx", marker = "sys_platform != 'emscripten'" },
-    { name = "pydantic", marker = "sys_platform != 'emscripten'" },
-    { name = "pydantic-core", marker = "sys_platform != 'emscripten'" },
-    { name = "requests", marker = "sys_platform != 'emscripten'" },
-    { name = "tokenizers", marker = "sys_platform != 'emscripten'" },
-    { name = "types-requests", marker = "sys_platform != 'emscripten'" },
-    { name = "typing-extensions", marker = "sys_platform != 'emscripten'" },
+    { name = "fastavro" },
+    { name = "httpx" },
+    { name = "pydantic" },
+    { name = "pydantic-core" },
+    { name = "requests" },
+    { name = "tokenizers" },
+    { name = "types-requests" },
+    { name = "typing-extensions" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/85/e2/d38ef3a50a0b2bc75868df26ad0590ace76669559bd13c0f0edf412ca4c6/cohere-6.0.0.tar.gz", hash = "sha256:d08319957bc6f61c3c07f129299773868c0c6796786c9bb940ac8dcfcebbb3d5", size = 194128, upload-time = "2026-04-08T22:32:52.005Z" }
 wheels = [
@@ -780,6 +712,74 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/66/2c/fced34890f6e5a93a4b7afb2c71e8eee2a0719fb26193a0abf159ecb714d/cyclopts-4.10.2.tar.gz", hash = "sha256:d7b950457ef2563596d56331f80cbbbf86a2772535fb8b315c4f03bc7e6127f1", size = 166664, upload-time = "2026-04-08T23:57:45.805Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b4/bd/05055d8360cef0757d79367157f3b15c0a0715e81e08f86a04018ec045f0/cyclopts-4.10.2-py3-none-any.whl", hash = "sha256:a1f2d6f8f7afac9456b48f75a40b36658778ddc9c6d406b520d017ae32c990fe", size = 204314, upload-time = "2026-04-08T23:57:46.969Z" },
+]
+
+[[package]]
+name = "deeprole"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "aiosqlite" },
+    { name = "asyncpg" },
+    { name = "bcrypt" },
+    { name = "fastapi" },
+    { name = "httpx" },
+    { name = "jieba" },
+    { name = "openai" },
+    { name = "pydantic-ai" },
+    { name = "pydantic-settings" },
+    { name = "python-dotenv" },
+    { name = "sqlite-vec" },
+    { name = "sseclient" },
+    { name = "tiktoken" },
+    { name = "uvicorn" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "pytest-mock" },
+]
+local-vec = [
+    { name = "aiosqlite" },
+    { name = "sqlite-vec" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "aiosqlite", specifier = ">=0.22.1" },
+    { name = "aiosqlite", marker = "extra == 'local-vec'", specifier = ">=0.22.1" },
+    { name = "asyncpg", specifier = ">=0.30.0" },
+    { name = "bcrypt" },
+    { name = "fastapi", specifier = ">=0.116.0" },
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "jieba", specifier = ">=0.42.1" },
+    { name = "openai", specifier = ">=1.0" },
+    { name = "pydantic-ai", specifier = ">=1.79.0" },
+    { name = "pydantic-settings", specifier = ">=2.11.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.24" },
+    { name = "pytest-mock", marker = "extra == 'dev'", specifier = ">=3.14" },
+    { name = "python-dotenv", specifier = ">=1.0" },
+    { name = "sqlite-vec", specifier = ">=0.1.6" },
+    { name = "sqlite-vec", marker = "extra == 'local-vec'", specifier = ">=0.1.6" },
+    { name = "sseclient" },
+    { name = "tiktoken", specifier = ">=0.7" },
+    { name = "uvicorn", specifier = ">=0.35.0" },
+]
+provides-extras = ["local-vec", "dev"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest", specifier = ">=9.0.2" },
+    { name = "pytest-asyncio", specifier = ">=1.3.0" },
 ]
 
 [[package]]
@@ -2912,8 +2912,8 @@ name = "secretstorage"
 version = "3.5.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "cryptography", marker = "sys_platform != 'emscripten' and sys_platform != 'win32'" },
-    { name = "jeepney", marker = "sys_platform != 'emscripten' and sys_platform != 'win32'" },
+    { name = "cryptography" },
+    { name = "jeepney" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/1c/03/e834bcd866f2f8a49a85eaff47340affa3bfa391ee9912a952a1faa68c7b/secretstorage-3.5.0.tar.gz", hash = "sha256:f04b8e4689cbce351744d5537bf6b1329c6fc68f91fa666f60a380edddcd11be", size = 19884, upload-time = "2025-11-23T19:02:53.191Z" }
 wheels = [
@@ -3082,7 +3082,7 @@ name = "tokenizers"
 version = "0.22.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "huggingface-hub", marker = "sys_platform != 'emscripten'" },
+    { name = "huggingface-hub" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/73/6f/f80cfef4a312e1fb34baf7d85c72d4411afde10978d4657f8cdd811d3ccc/tokenizers-0.22.2.tar.gz", hash = "sha256:473b83b915e547aa366d1eee11806deaf419e17be16310ac0a14077f1e28f917", size = 372115, upload-time = "2026-01-05T10:45:15.988Z" }
 wheels = [
@@ -3142,7 +3142,7 @@ name = "types-requests"
 version = "2.33.0.20260327"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "urllib3", marker = "sys_platform != 'emscripten'" },
+    { name = "urllib3" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/02/5f/2e3dbae6e21be6ae026563bad96cbf76602d73aa85ea09f13419ddbdabb4/types_requests-2.33.0.20260327.tar.gz", hash = "sha256:f4f74f0b44f059e3db420ff17bd1966e3587cdd34062fe38a23cda97868f8dd8", size = 23804, upload-time = "2026-03-27T04:23:38.737Z" }
 wheels = [

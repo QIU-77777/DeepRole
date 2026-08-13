@@ -5,7 +5,6 @@
   // 通过 this 调用外壳的 composer/consolidation/fetchCharacters/notice 等。
   function createState() {
     return {
-      observeMode: false,
       characterCount: 0,
       messages: [],
       choices: [],
@@ -25,6 +24,11 @@
         { color: "#5b7d86", border: "rgba(91, 125, 134, 0.2)", background: "rgba(91, 125, 134, 0.08)" },
         { color: "#95684d", border: "rgba(149, 104, 77, 0.2)", background: "rgba(149, 104, 77, 0.08)" },
       ],
+      // 固定角色配色（按显示名），不随出场顺序变化：林溪=红，沈知意=黄
+      agentColorOverrides: {
+        "林溪": { color: "#b45a64", border: "rgba(180, 90, 100, 0.18)", background: "rgba(180, 90, 100, 0.08)" },
+        "沈知意": { color: "#c2a14d", border: "rgba(194, 161, 77, 0.22)", background: "rgba(194, 161, 77, 0.08)" },
+      },
 
       parseNarratorLine(rawLine) {
         const line = String(rawLine || "").replace(/\*\*/g, "").trim();
@@ -211,8 +215,10 @@
       getAgentStyle(author) {
         const key = author || "角色";
         if (!this.agentStyleByAuthor[key]) {
-          const index = Object.keys(this.agentStyleByAuthor).length % this.agentPalette.length;
-          this.agentStyleByAuthor[key] = this.agentPalette[index];
+          const style =
+            this.agentColorOverrides[key] ||
+            this.agentPalette[Object.keys(this.agentStyleByAuthor).length % this.agentPalette.length];
+          this.agentStyleByAuthor[key] = style;
         }
         return this.agentStyleByAuthor[key];
       },
@@ -223,9 +229,9 @@
         if (!text && !normalizedPayload) return null;
         const resolvedAuthor = kind === "player" ? "你" : (author || "旁白");
         const style = kind === "agent" ? this.getAgentStyle(resolvedAuthor) : {
-          color: "#b45a64",
-          border: "rgba(180, 90, 100, 0.18)",
-          background: kind === "player" ? "rgba(180, 90, 100, 0.08)" : "rgba(255, 251, 247, 0.88)",
+          color: "#6a8165",
+          border: "rgba(106, 129, 101, 0.3)",
+          background: "rgba(106, 129, 101, 0.12)",
         };
         return {
           id: this.nextMessageId++,
@@ -404,7 +410,6 @@
         this.choiceStatus = "hidden";
         this.nextMessageId = 1;
         this.agentStyleByAuthor = {};
-        this.observeMode = false;
         this.oldestLoadedTurn = null;
         this.historyExhausted = false;
         this.loadingOlder = false;
@@ -503,14 +508,10 @@
         if (this.isCompact) {
           this.blurComposer();
         }
-        if (this.observeMode) {
-          this.addMessage("narrator", "旁白", `*（观察模式：${message}）*`, 0, { forceScroll: true });
-        } else {
-          this.addMessage("player", "你", message, 0, { forceScroll: true });
-        }
+        this.addMessage("player", "你", message, 0, { forceScroll: true });
         this.resetComposer();
         this.choices = [];
-        this.choiceStatus = this.observeMode ? "hidden" : "loading";
+        this.choiceStatus = "loading";
         this.busy = true;
         const streamId = this.activeStreamId + 1;
         this.activeStreamId = streamId;
@@ -539,7 +540,7 @@
         const response = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message, mode: this.observeMode ? "observe" : "participate" }),
+          body: JSON.stringify({ message }),
           signal: controller.signal,
         });
 
@@ -604,11 +605,6 @@
           } else if (event.type === "choices") {
             this.choices = event.choices || [];
             this.choiceStatus = this.choices.length ? "ready" : "empty";
-            if (this.choices.length) {
-              this.setNotice("这一轮已生成新的建议行动。", "success");
-            } else {
-              this.setNotice("这一轮没有预设选项，你可以直接输入下一句。", "success");
-            }
           } else if (event.type === "done") {
             this.setConsolidating(Boolean(event.consolidating));
             this.fetchCharacters();

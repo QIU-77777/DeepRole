@@ -133,7 +133,7 @@ async def test_chat_stream_does_not_wait_for_pending_state_update(monkeypatch):
     async def blocking_task():
         await release.wait()
 
-    async def fake_route(_self, _user_input, *, observation_mode=False):
+    async def fake_route(_self, _user_input):
         return None, False
 
     task = server_module.asyncio.create_task(blocking_task())
@@ -161,7 +161,7 @@ async def test_chat_stream_yields_response_done_before_choices(monkeypatch):
     choices_started = server_module.asyncio.Event()
     maintenance_calls: list[object] = []
 
-    async def fake_route(_self, _user_input, *, observation_mode=False):
+    async def fake_route(_self, _user_input):
         return _narrator_output(), True
 
     async def fake_broadcast_player_message(_targets, _user_input):
@@ -239,7 +239,7 @@ async def test_new_chat_cancels_pending_choices(monkeypatch):
     choices_started = server_module.asyncio.Event()
     choices_cancelled = server_module.asyncio.Event()
 
-    async def fake_route(_self, user_input, *, observation_mode=False):
+    async def fake_route(_self, user_input):
         if user_input == "第一轮":
             return _narrator_output(scene_description="第一轮场景"), True
         return None, False
@@ -562,7 +562,7 @@ async def test_chat_stream_emits_created_character_identity(monkeypatch):
     async def fake_settle_pending_state_update(*, cancel=False):
         return None
 
-    async def fake_route(_self, _user_input, *, observation_mode=False):
+    async def fake_route(_self, _user_input):
         return _narrator_output(
             targets=[],
             new_characters=[

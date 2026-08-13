@@ -14,7 +14,7 @@ except ModuleNotFoundError as exc:
     pytest.skip(f"skip llm config tests: missing dependency ({exc})", allow_module_level=True)
 
 
-_CONFIG_KEYS = {"api_url", "api_key", "model_id", "temperature", "provider"}
+_CONFIG_KEYS = {"api_url", "api_key", "model_id", "temperature", "provider", "disable_thinking"}
 
 
 _LLM_ENV_KEYS = [

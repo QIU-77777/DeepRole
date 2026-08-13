@@ -163,8 +163,6 @@ state_updater reads the input blocks and decides on its own whether the upcoming
 triggered prunes the narrator "待触发事件" queue (events that fired, were missed, or are duplicate); add_event names must keep the 【角色显示名：事件名】 prefix because triggered / mark_triggered match by that string
 ```
 
-Observation mode uses the same SSE chat endpoint with `mode="observe"`: the narrator runs with the observation prompt, the player message is not written to raw history, selected characters respond to the narrator scene, choices are cleared instead of generated, and state update / consolidation still run after the round.
-
 ## Agent Output and Writeback Mechanism
 
 All structured agents use pydantic-ai's `PromptedOutput` structured output, no longer using XML `<update_notes>`:

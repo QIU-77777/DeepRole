@@ -190,7 +190,6 @@ def build_user_message(
     memory_prefix: str,
     raw_messages: list[dict] | None = None,
     understandings_prefix: str = "",
-    observation_mode: bool = False,
 ) -> tuple[str, bool]:
     """构建单条大 user message，按稳定度排序上下文。返回 (消息文本, 是否触发历史截断)。"""
     parts: list[str] = []
@@ -207,9 +206,6 @@ def build_user_message(
     )
     parts.append(memory_prefix if memory_prefix else "")
     parts.append(understandings_prefix if understandings_prefix else "")
-    if not observation_mode:
-        parts.append(f"玩家新消息：{latest_user_input}")
-    elif is_narrator:
-        parts.append(f"玩家想旁观：{latest_user_input}")
+    parts.append(f"玩家新消息：{latest_user_input}")
 
     return "\n\n---\n\n".join(part for part in parts if part), was_truncated

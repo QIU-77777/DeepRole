@@ -12,7 +12,6 @@ import traceback
 from functools import lru_cache
 from pathlib import Path
 
-from typing import Literal
 
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
@@ -577,13 +576,11 @@ async def api_new_game(req: NewGameRequest) -> JSONResponse:
 
 class ChatRequest(BaseModel):
     message: str
-    mode: Literal["participate", "observe"] = "participate"
 
 
-async def _chat_stream(user_input: str, mode: Literal["participate", "observe"] = "participate"):
+async def _chat_stream(user_input: str):
     """核心游戏循环，通过 SSE 逐步推送结果。"""
     global _pending_choices_task
-    observation_mode = mode == "observe"
     choices_token = _invalidate_pending_choices(clear_saved=True)
     # 0 = 哨兵：本轮还没有 narrator 成功发言，不触发 consolidation
     current_turn = 0
@@ -596,10 +593,7 @@ async def _chat_stream(user_input: str, mode: Literal["participate", "observe"] 
             routing_logger.warning("state_updater 超时（>60s），done 事件提前发出")
 
     # 1. narrator 路由
-    narrator_output, is_narrator_valid = await narrator_service.route(
-        user_input,
-        observation_mode=observation_mode,
-    )
+    narrator_output, is_narrator_valid = await narrator_service.route(user_input)
     targets = narrator_output.targets if narrator_output is not None else []
     new_character_specs = narrator_output.new_characters if narrator_output is not None else []
 
@@ -626,8 +620,7 @@ async def _chat_stream(user_input: str, mode: Literal["participate", "observe"] 
     # 旁白失败时不把玩家消息写进 raw，避免下一轮上下文里残留没人回应的玩家话语。
     narrator_dump = narrator_output.model_dump() if narrator_output is not None else None
     if is_narrator_valid:
-        if not observation_mode:
-            await message_router.broadcast_player_message(targets, user_input)
+        await message_router.broadcast_player_message(targets, user_input)
         current_turn = await message_router.broadcast_narrator_output(targets, narrator_dump)
     if narrator_dump is not None:
         yield _sse_event(
@@ -655,8 +648,6 @@ async def _chat_stream(user_input: str, mode: Literal["participate", "observe"] 
                 agent_name,
                 targets,
                 user_input,
-                observation_mode=observation_mode,
-                narrator_output=narrator_output,
             )
             if response:
                 agent_responses.append((agent_name, response))
@@ -672,7 +663,7 @@ async def _chat_stream(user_input: str, mode: Literal["participate", "observe"] 
             )
 
     choices_task: asyncio.Task[list[str]] | None = None
-    if agent_responses and not observation_mode and choices_token == _choices_generation_token:
+    if agent_responses and choices_token == _choices_generation_token:
         choices_task = asyncio.create_task(generate_choices(narrator_output, agent_responses))
         _pending_choices_task = choices_task
 
@@ -706,7 +697,7 @@ async def _chat_stream(user_input: str, mode: Literal["participate", "observe"] 
 @app.post("/api/chat")
 async def api_chat(req: ChatRequest) -> StreamingResponse:
     return StreamingResponse(
-        _chat_stream(req.message, req.mode),
+        _chat_stream(req.message),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

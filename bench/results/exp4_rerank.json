@@ -1,0 +1,43 @@
+{
+  "episode_vector": {
+    "r1": 0.4166666666666667,
+    "mrr": 0.513888888888889,
+    "per_type": {
+      "fact": 1.0,
+      "emotion": 0.25,
+      "infer": 0.0
+    }
+  },
+  "episode_hybrid_rerank": {
+    "r1": 0.5,
+    "mrr": 0.5972222222222222,
+    "per_type": {
+      "fact": 1.0,
+      "emotion": 0.25,
+      "infer": 0.25
+    }
+  },
+  "understanding_vector": {
+    "r1": 0.4166666666666667,
+    "mrr": 0.5833333333333334,
+    "per_type": {
+      "belief": 0.25,
+      "fact": 0.5,
+      "infer": 0.5
+    }
+  },
+  "understanding_hybrid_rerank": {
+    "r1": 0.5833333333333334,
+    "mrr": 0.7083333333333334,
+    "per_type": {
+      "belief": 0.5,
+      "fact": 1.0,
+      "infer": 0.25
+    }
+  },
+  "improvement": {
+    "episode": 0.08333333333333331,
+    "understanding": 0.16666666666666669,
+    "average": 0.125
+  }
+}
