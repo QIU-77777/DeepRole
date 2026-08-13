@@ -93,7 +93,7 @@ def reset_logs():
                     print(f"  清空失败 {filepath}: {e}", flush=True)
 
 
-async def reset_game(story_id: str = "modern") -> tuple[str, str]:
+async def reset_game(story_id: str = "drama") -> tuple[str, str]:
     """重置游戏，从 templates/{story_id} 重新创建 characters 目录
 
     Args:
@@ -657,7 +657,7 @@ def _clear_save_id() -> None:
 
 
 def _read_story_theme() -> str:
-    """读取 .story_id 标记文件，返回故事主题（如 school / modern）"""
+    """读取 .story_id 标记文件，返回故事主题（如 school / drama）"""
     story_id_path = CHARACTERS_DIR / ".story_id"
     try:
         return story_id_path.read_text(encoding="utf-8").strip()

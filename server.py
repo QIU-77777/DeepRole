@@ -484,11 +484,11 @@ async def api_stories() -> JSONResponse:
     """列出可选故事模板。"""
     stories = [
         {
-            "id": "modern",
-            "label": "不期而遇",
-            "title": "不期而遇",
-            "tagline": "现代都市",
-            "summary": "在城市日常与偶然重逢之间，让暧昧、克制和误差一点点累积成新的局面。",
+            "id": "drama",
+            "label": "未名剧社 · 晚风来信",
+            "title": "未名剧社 · 晚风来信",
+            "tagline": "大学话剧社",
+            "summary": "大一新生加入未名剧社，和两位大二学姐为一台校庆公演从陌生到一起兜底，在排练的磕碰里慢慢长出能托付的友情。",
         },
     ]
     return JSONResponse({"stories": stories})
@@ -536,7 +536,7 @@ async def api_memory_graph(agent: str | None = None) -> JSONResponse:
 
 
 class NewGameRequest(BaseModel):
-    story_id: str = "modern"
+    story_id: str = "drama"
 
 
 @app.post("/api/new_game")
@@ -882,7 +882,7 @@ async def api_delete_save(filename: str) -> JSONResponse:
 
 
 class ResetRequest(BaseModel):
-    story_id: str = "modern"
+    story_id: str = "drama"
 
 
 @app.post("/api/reset")

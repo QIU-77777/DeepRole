@@ -26,7 +26,7 @@ deeprole-memos/
 │   ├── runtime/                # Runtime state (ignored by git)
 │   │   ├── characters/         # Runtime character data
 │   │   └── vectors.sqlite      # Vector store
-│   ├── templates/              # Story templates (modern)
+│   ├── templates/              # Story templates (drama)
 ├── models/                     # Domain layer (innermost): entities + value objects + pure domain rules, zero I/O
 │   ├── character.py            # Character entity + get_display_name / extract_identity (derive from soul)
 │   ├── memory.py               # EpisodeMemory / Understanding / UnderstandingHistoryEntry
@@ -316,7 +316,7 @@ Save includes:
 
 Currently built-in story templates:
 
-- `modern`: `chenxiao` / `guyining` / `narrator`
+- `drama`: `linxi` / `shenzhiyi` / `narrator`
 
 ## Development Conventions
 

@@ -65,7 +65,12 @@ _GOOGLE_SAFETY_OFF = [
 _MakeModel = Callable[[dict], Model]
 _MakeSettings = Callable[[dict], ModelSettings]
 
-_default_make_settings: _MakeSettings = lambda c: ModelSettings(temperature=c["temperature"])
+def _make_settings(c: dict) -> ModelSettings:
+    settings: ModelSettings = ModelSettings(temperature=c["temperature"])
+    if c.get("disable_thinking") and c["provider"] in ("openai", "deepseek"):
+        # SiliconFlow / DeepSeek 推理模型：关闭思考以大幅降低首字延迟
+        settings["extra_body"] = {"thinking": {"type": "disabled"}}
+    return settings
 
 # 新增 provider：加一行 tuple 即可
 _PROVIDER_REGISTRY: dict[str, tuple[_MakeModel, _MakeSettings]] = {
@@ -74,7 +79,7 @@ _PROVIDER_REGISTRY: dict[str, tuple[_MakeModel, _MakeSettings]] = {
             c["model_id"],
             provider=OpenAIProvider(base_url=c["api_url"] or None, api_key=c["api_key"]),
         ),
-        _default_make_settings,
+        _make_settings,
     ),
     "google": (
         lambda c: GoogleModel(
@@ -91,14 +96,14 @@ _PROVIDER_REGISTRY: dict[str, tuple[_MakeModel, _MakeSettings]] = {
             c["model_id"],
             provider=AnthropicProvider(api_key=c["api_key"]),
         ),
-        _default_make_settings,
+        _make_settings,
     ),
     "deepseek": (
         lambda c: OpenAIChatModel(
             c["model_id"],
             provider=DeepSeekProvider(api_key=c["api_key"]),
         ),
-        _default_make_settings,
+        _make_settings,
     ),
 }
 

@@ -120,11 +120,11 @@ DeepRole/
 ├── repository/          # 基础设施（文件、sqlite-vec、LLM/embedding/rerank 客户端、日志）
 ├── app/                 # 用例层（conversation / narrator / consolidation / memory / character_factory）
 ├── prompts/             # LLM prompt 资源
-├── data/templates/      # 故事模板（当前：modern / Partial·偏心）
-│   └── modern/
+├── data/templates/      # 故事模板（当前：drama / 未名剧社）
+│   └── drama/
 │       ├── narrator/    # 旁白 soul + status + tasks（剧情种子）
-│       ├── chenxiao/     # 江知夏 soul/status/intents/memory_draft
-│       └── guyining/     # 顾明汐 soul/status/intents/memory_draft
+│       ├── linxi/        # 林溪 soul/status/intents/memory_draft
+│       └── shenzhiyi/    # 沈知意 soul/status/intents/memory_draft
 ├── static/              # 前端（Alpine.js SPA + Anthropic 风格 CSS）
 ├── server.py            # FastAPI 投递层 + SSE
 ├── config.toml          # 行为配置（记忆权重、历史阈值、温度等）
@@ -193,7 +193,7 @@ python -m uvicorn server:app
 
 进入页面后选择一个故事模板：
 
-- **`modern`（不期而遇）** —— 现代都市恋爱，初始双女主为江知夏（UI 设计师）和顾明汐（研发总监），玩家以产品经理身份入职，三人因跨部门协作被拉到一起。
+- **`drama`（未名剧社 · 晚风来信）** —— 大学话剧社青春友谊，玩家是大一新生叶清让，与两位大二学姐林溪（主演）、沈知意（编剧）为一台校庆公演从陌生到一起兜底，在排练的磕碰里慢慢长出能托付的友情。
 
 选择故事后，直接在输入框里说话或描述行动即可。
 
