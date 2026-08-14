@@ -6,7 +6,7 @@ Usage:
     uv run python scripts/query_vectors.py list
 
     # 查看内容（可按角色或日期过滤）
-    uv run python scripts/query_vectors.py show [--limit 20] [--agent chenxiao] [--date 10月4日] [--order desc]
+    uv run python scripts/query_vectors.py show [--limit 20] [--agent linxi] [--date 10月4日] [--order desc]
 
     # 统计信息
     uv run python scripts/query_vectors.py stats
@@ -151,7 +151,7 @@ async def main():
 
     show_parser = sub.add_parser("show", help="查看记忆内容")
     show_parser.add_argument("--limit", type=int, default=20, help="显示条数（默认 20）")
-    show_parser.add_argument("--agent", type=str, default=None, help="按角色过滤（如 chenxiao）")
+    show_parser.add_argument("--agent", type=str, default=None, help="按角色过滤（如 linxi）")
     show_parser.add_argument("--date", type=str, default=None, help="按游戏日期过滤（如 10月4日）")
     show_parser.add_argument("--order", type=str, default="asc", help="排序：asc|desc（默认 asc）")
 

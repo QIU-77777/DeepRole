@@ -63,7 +63,7 @@ def test_render_player_relations_computes_from_character_status(monkeypatch):
         ("role_empty", "status.md"): "# Empty\n\n## 和玩家的关系\n",
         ("role_empty", "soul.md"): "# Empty",
     }
-    display_names = {"role_a": "美月", "role_b": "陈晓", "role_empty": "空角色"}
+    display_names = {"role_a": "美月", "role_b": "林溪", "role_empty": "空角色"}
 
     monkeypatch.setattr(
         prompt_builder_module,
@@ -81,7 +81,7 @@ def test_render_player_relations_computes_from_character_status(monkeypatch):
 
     assert (
         prompt_builder_module.render_player_relations()
-        == "## 和玩家的关系\n- 美月：恋人\n- 陈晓：刚认识 但有好感"
+        == "## 和玩家的关系\n- 美月：恋人\n- 林溪：刚认识 但有好感"
     )
 
 

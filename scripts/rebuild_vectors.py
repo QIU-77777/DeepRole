@@ -3,7 +3,7 @@
 
 Usage:
     uv run python scripts/rebuild_vectors.py             # 重建所有角色
-    uv run python scripts/rebuild_vectors.py chenxiao   # 重建指定角色
+    uv run python scripts/rebuild_vectors.py linxi      # 重建指定角色
 """
 
 import asyncio

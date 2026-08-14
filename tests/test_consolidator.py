@@ -44,7 +44,7 @@ def _make_character_path(tmp_path: Path):
 def _event(date: str, slot: str, content: str) -> str:
     return (
         f"- **时间**：{date} {slot}\n"
-        "- **地点**：公司\n"
+        "- **地点**：活动室\n"
         "- **在场**：我、他\n"
         f"- **内容**：{content}"
     )
@@ -126,7 +126,7 @@ def test_prepare_slice_returns_none_when_draft_empty(tmp_path, monkeypatch):
     monkeypatch.setattr(memory_store_module, "character_path", _make_character_path(tmp_path))
     consolidator = MemoryConsolidationFlow()
 
-    result = consolidator._prepare_consolidation_slice("chenxiao", until_turn=5, raw_messages=[])
+    result = consolidator._prepare_consolidation_slice("linxi", until_turn=5, raw_messages=[])
     assert result is None
 
 
@@ -134,16 +134,16 @@ def test_prepare_slice_skips_entries_beyond_until_turn(tmp_path, monkeypatch):
     """只取 turn <= until_turn 的 draft 条目，后续 turn 留在 remaining。"""
     monkeypatch.setattr(memory_store_module, "character_path", _make_character_path(tmp_path))
 
-    memory_store_module.append_memory_draft("chenxiao", 3, "- 第三轮 draft")
-    memory_store_module.append_memory_draft("chenxiao", 5, "- 第五轮 draft")
+    memory_store_module.append_memory_draft("linxi", 3, "- 第三轮 draft")
+    memory_store_module.append_memory_draft("linxi", 5, "- 第五轮 draft")
 
     raw_messages = [
-        {"role": "narrator", "content": "场景 A", "visible_to": ["chenxiao", "narrator"], "turn": 3},
-        {"role": "chenxiao", "content": "回应 A", "visible_to": ["chenxiao", "narrator"], "turn": 3},
+        {"role": "narrator", "content": "场景 A", "visible_to": ["linxi", "narrator"], "turn": 3},
+        {"role": "linxi", "content": "回应 A", "visible_to": ["linxi", "narrator"], "turn": 3},
     ]
     consolidator = MemoryConsolidationFlow()
     result = consolidator._prepare_consolidation_slice(
-        "chenxiao", until_turn=3, raw_messages=raw_messages
+        "linxi", until_turn=3, raw_messages=raw_messages
     )
 
     assert result is not None
@@ -158,11 +158,11 @@ def test_prepare_slice_skips_entries_beyond_until_turn(tmp_path, monkeypatch):
 def test_prepare_slice_returns_none_when_no_entries_within_turn(tmp_path, monkeypatch):
     """Draft 非空但所有条目 turn 都大于 until_turn 时跳过。"""
     monkeypatch.setattr(memory_store_module, "character_path", _make_character_path(tmp_path))
-    memory_store_module.append_memory_draft("chenxiao", 10, "- 未来轮 draft")
+    memory_store_module.append_memory_draft("linxi", 10, "- 未来轮 draft")
 
     consolidator = MemoryConsolidationFlow()
     result = consolidator._prepare_consolidation_slice(
-        "chenxiao", until_turn=5, raw_messages=[]
+        "linxi", until_turn=5, raw_messages=[]
     )
 
     assert result is None
@@ -192,7 +192,7 @@ async def test_detect_closures_does_not_close_latest_open_narrator_turn(monkeypa
         assert "[turn=4]" in user
         return LLMEpisodeClosure.model_validate(
             {
-                "chenxiao": [
+                "linxi": [
                     {
                         "end_turn": 3,
                         "old_theme": "上一段互动",
@@ -216,24 +216,24 @@ async def test_detect_closures_does_not_close_latest_open_narrator_turn(monkeypa
     )
 
     raw_messages = [
-        {"role": "narrator", "content": "旧场景", "turn": 3, "visible_to": ["chenxiao", "narrator"]},
-        {"role": "chenxiao", "content": "旧回应", "turn": 3, "visible_to": ["chenxiao", "narrator"]},
-        {"role": "narrator", "content": "新场景", "turn": 4, "visible_to": ["chenxiao", "narrator"]},
-        {"role": "chenxiao", "content": "新回应", "turn": 4, "visible_to": ["chenxiao", "narrator"]},
+        {"role": "narrator", "content": "旧场景", "turn": 3, "visible_to": ["linxi", "narrator"]},
+        {"role": "linxi", "content": "旧回应", "turn": 3, "visible_to": ["linxi", "narrator"]},
+        {"role": "narrator", "content": "新场景", "turn": 4, "visible_to": ["linxi", "narrator"]},
+        {"role": "linxi", "content": "新回应", "turn": 4, "visible_to": ["linxi", "narrator"]},
     ]
 
     closures = await consolidator._detect_closures(
-        ["chenxiao"],
+        ["linxi"],
         raw_messages,
         earliest_draft_turn=3,
         latest_open_turn=4,
     )
 
-    assert closures == {"chenxiao": 3}
+    assert closures == {"linxi": 3}
 
 
 def test_agent_file_updates_return_structured_json_items(tmp_path, monkeypatch):
-    agent_name = "chenxiao"
+    agent_name = "linxi"
     path_helper = _make_character_path(tmp_path)
 
     monkeypatch.setattr(status_file_module, "character_path", path_helper)
@@ -318,7 +318,7 @@ async def test_merge_memory_blocks_uses_episode_memory_generator(monkeypatch):
         captured["agent"] = agent
         captured["user"] = user
         assert output_type is LLMEpisodeMemory
-        assert agent_name == "chenxiao"
+        assert agent_name == "linxi"
         assert function_name == "episode_memory_generator"
         return LLMEpisodeMemory(
             date="10月19日",
@@ -338,7 +338,7 @@ async def test_merge_memory_blocks_uses_episode_memory_generator(monkeypatch):
     )
 
     episode = await consolidator._merge_memory_blocks(
-        "chenxiao",
+        "linxi",
         "payload",
         "raw 对话原文",
     )
@@ -348,7 +348,7 @@ async def test_merge_memory_blocks_uses_episode_memory_generator(monkeypatch):
     assert episode.date == "10月19日"
     assert episode.content == "一起吃饭。"
     assert episode.location == "餐厅"
-    assert episode.memory_owner == "chenxiao"
+    assert episode.memory_owner == "linxi"
     assert episode.keywords == ["餐厅", "吃饭", "日常"]
     assert episode.importance == 2
     assert episode.title == "餐厅晚饭"
@@ -365,7 +365,7 @@ def test_apply_understanding_patch_updates_and_adds(monkeypatch):
     existing = {
         "u1": Understanding(
             id="u1",
-            memory_owner="chenxiao",
+            memory_owner="linxi",
             subject="对玩家的认知",
             keywords=["玩家"],
             content="旧理解。",
@@ -400,7 +400,7 @@ def test_apply_understanding_patch_updates_and_adds(monkeypatch):
     )
 
     result = consolidator_module._apply_understanding_patch(
-        "chenxiao",
+        "linxi",
         existing,
         patch,
         EpisodeMemory(id="e1", date="10月19日", title="餐厅晚饭"),
@@ -414,7 +414,7 @@ def test_apply_understanding_patch_updates_and_adds(monkeypatch):
     assert result.updated["u1"].history[-1].date == "10月19日"
     assert result.updated["u1"].history[-1].title == "餐厅晚饭"
     assert result.updated["u1"].history[-1].content == "玩家在压力下会先确认她是否安全。"
-    assert result.updated["new-understanding-id"].memory_owner == "chenxiao"
+    assert result.updated["new-understanding-id"].memory_owner == "linxi"
     assert result.updated["new-understanding-id"].content == "玩家会用行动解释。"
     assert len(result.updated["new-understanding-id"].history) == 1
     assert result.updated["new-understanding-id"].history[0].episode_id == "e1"
@@ -427,7 +427,7 @@ def test_apply_understanding_patch_does_not_append_history_for_link_only_update(
     existing = {
         "u1": Understanding(
             id="u1",
-            memory_owner="chenxiao",
+            memory_owner="linxi",
             subject="对玩家的认知",
             keywords=["玩家"],
             content="玩家会认真履行约定。",
@@ -445,7 +445,7 @@ def test_apply_understanding_patch_does_not_append_history_for_link_only_update(
     )
 
     result = consolidator_module._apply_understanding_patch(
-        "chenxiao",
+        "linxi",
         existing,
         patch,
         EpisodeMemory(id="e1", date="10月20日", title="再次确认"),
@@ -572,7 +572,7 @@ async def test_apply_pipeline_assigns_episode_id_before_understanding_patch(monk
             location="餐厅",
             participants="我、他",
             content="一起吃饭。",
-            memory_owner="chenxiao",
+            memory_owner="linxi",
         )
 
     async def fake_understanding(_self, _agent_name, episode):
@@ -585,7 +585,7 @@ async def test_apply_pipeline_assigns_episode_id_before_understanding_patch(monk
     )
 
     episode, errors = await consolidator._apply_consolidation_pipeline(
-        "chenxiao", "draft", "raw"
+        "linxi", "draft", "raw"
     )
 
     assert errors == []
@@ -600,7 +600,7 @@ async def test_patch_understandings_writes_file_and_syncs_vectors(tmp_path, monk
         hex = "new-understanding-id"
 
     consolidator = MemoryConsolidationFlow()
-    agent_name = "chenxiao"
+    agent_name = "linxi"
     path_helper = _make_character_path(tmp_path)
     sentinel_agent = object()
 
@@ -615,7 +615,7 @@ async def test_patch_understandings_writes_file_and_syncs_vectors(tmp_path, monk
 
     agent_dir = tmp_path / agent_name
     agent_dir.mkdir(parents=True, exist_ok=True)
-    (agent_dir / "soul.md").write_text("<identity>陈晓</identity>", encoding="utf-8")
+    (agent_dir / "soul.md").write_text("<identity>林溪</identity>", encoding="utf-8")
     write_understandings(
         agent_name,
         {
@@ -641,7 +641,7 @@ async def test_patch_understandings_writes_file_and_syncs_vectors(tmp_path, monk
     ):
         assert agent is sentinel_agent
         assert output_type is LLMUnderstandingPatch
-        assert agent_name == "chenxiao"
+        assert agent_name == "linxi"
         assert function_name == "understanding_patch"
         assert '"id": "e1"' in user
         assert "[u1] subject='对玩家的认知'" in user
@@ -720,7 +720,7 @@ async def test_patch_understandings_writes_file_and_syncs_vectors(tmp_path, monk
 @pytest.mark.asyncio
 async def test_consolidate_agent_merges_draft_into_memory_and_clears_draft(tmp_path, monkeypatch):
     consolidator = MemoryConsolidationFlow()
-    agent_name = "chenxiao"
+    agent_name = "linxi"
     path_helper = _make_character_path(tmp_path)
 
     monkeypatch.setattr(agent_files_module, "character_path", path_helper)
@@ -752,9 +752,9 @@ async def test_consolidate_agent_merges_draft_into_memory_and_clears_draft(tmp_p
     seed_record = EpisodeMemory(
         date="10月6日",
         time="10月6日 上午",
-        location="公司",
+        location="活动室",
         participants="我、他",
-        keywords=["公司", "日常"],
+        keywords=["活动室", "日常"],
         importance=2,
         content="上午稳定内容。",
     )
@@ -769,9 +769,9 @@ async def test_consolidate_agent_merges_draft_into_memory_and_clears_draft(tmp_p
     rewritten_episode = EpisodeMemory(
         date="10月6日",
         time="10月6日 中午",
-        location="公司",
+        location="活动室",
         participants="我、他",
-        keywords=["公司", "合并"],
+        keywords=["活动室", "合并"],
         importance=3,
         content="中午下午合并后内容。",
     )

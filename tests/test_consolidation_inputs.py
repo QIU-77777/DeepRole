@@ -21,26 +21,26 @@ def _sample_messages() -> list[dict]:
     return [
         {
             "role": "narrator",
-            "content": "**时间**：10月6日 星期五 11:42\n**地点**：舒芙蕾店",
-            "visible_to": ["chenxiao", "narrator"],
+            "content": "**时间**：10月6日 星期五 11:42\n**地点**：未名剧社活动室",
+            "visible_to": ["linxi", "narrator"],
             "turn": 3,
         },
         {
-            "role": "chenxiao",
-            "content": "（看着他）……那我点了哦。",
-            "visible_to": ["chenxiao", "narrator"],
+            "role": "linxi",
+            "content": "（看着剧本）……这句我记住了。",
+            "visible_to": ["linxi", "narrator"],
             "turn": 3,
         },
         {
             "role": "player",
-            "content": "我猜啊，你吃不完的是我的",
-            "visible_to": ["chenxiao", "narrator"],
+            "content": "我今晚回去把独白背完。",
+            "visible_to": ["linxi", "narrator"],
             "turn": 4,
         },
         {
-            "role": "guyining",
-            "content": "先把文件发我。",
-            "visible_to": ["chenxiao", "guyining", "narrator"],
+            "role": "shenzhiyi",
+            "content": "台词卡我放桌上了。",
+            "visible_to": ["linxi", "shenzhiyi", "narrator"],
             "turn": 5,
         },
         {
@@ -56,11 +56,11 @@ def test_render_raw_history_filters_by_visibility_and_turn():
     """按 visible_to 过滤 + turn 区间截断，输出带 `[turn=N]` 前缀的对话。"""
     messages = _sample_messages()
 
-    rendered = render_raw_history(messages, visible_to="chenxiao", turn_ge=3, turn_le=4)
+    rendered = render_raw_history(messages, visible_to="linxi", turn_ge=3, turn_le=4)
 
     assert "[turn=3]" in rendered
     assert "[turn=4]" in rendered
-    assert "[turn=5]" not in rendered  # guyining/mitsuki 回合被截掉
+    assert "[turn=5]" not in rendered  # shenzhiyi/mitsuki 回合被截掉
     assert "旁白:" in rendered
     assert "玩家:" in rendered
     assert "mitsuki" not in rendered
@@ -69,8 +69,8 @@ def test_render_raw_history_filters_by_visibility_and_turn():
 def test_render_raw_history_without_filters_renders_all():
     """不带过滤时保留全部消息；无 turn 的消息不加前缀。"""
     messages = [
-        {"role": "player", "content": "hello", "visible_to": ["chenxiao"]},
-        {"role": "chenxiao", "content": "hi", "visible_to": ["chenxiao"], "turn": 2},
+        {"role": "player", "content": "hello", "visible_to": ["linxi"]},
+        {"role": "linxi", "content": "hi", "visible_to": ["linxi"], "turn": 2},
     ]
     rendered = render_raw_history(messages)
 
@@ -94,19 +94,19 @@ def test_build_episode_memory_generator_payload_includes_owner_before_memory(mon
 
     monkeypatch.setattr(
         "app.consolidation.inputs.read_agent_file",
-        lambda agent_name, filename: "<role>陈晓</role>" if filename == "soul.md" else "",
+        lambda agent_name, filename: "<role>林溪</role>" if filename == "soul.md" else "",
     )
 
     payload = build_episode_memory_generator_payload(
-        "chenxiao",
-        "## 10月6日\n- **时间**：10月6日 上午\n- **地点**：公司\n- **在场**：我、他\n- **内容**：测试内容。",
+        "linxi",
+        "## 10月6日\n- **时间**：10月6日 上午\n- **地点**：活动室\n- **在场**：我、他\n- **内容**：测试内容。",
         raw_dialogue="旁白：**时间**：10月6日 星期五 11:42",
     )
 
     assert payload.index("<memory_owner>") < payload.index("<memory_entries>")
     assert "<raw_dialogue>" in payload
-    assert "当前整理对象：陈晓（agent_name=chenxiao）" in payload
-    assert "- 我 = 陈晓" in payload
+    assert "当前整理对象：林溪（agent_name=linxi）" in payload
+    assert "- 我 = 林溪" in payload
     assert "- 他 = 玩家" in payload
     assert "旁白：**时间**：10月6日 星期五 11:42" in payload
 

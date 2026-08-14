@@ -361,7 +361,7 @@ class TestBuildUserMessage:
         msgs = [
             {"role": "player", "content": "旧消息", "visible_to": ["narrator"]},
             {"role": "narrator", "content": "旧场景", "visible_to": ["narrator"]},
-            {"role": "guyining", "content": "旧回复", "visible_to": ["narrator"]},
+            {"role": "shenzhiyi", "content": "旧回复", "visible_to": ["narrator"]},
         ]
 
         with patch("app.prompt_builder.read_agent_file", return_value="故事状态"):
@@ -370,6 +370,6 @@ class TestBuildUserMessage:
         assert "最近对话历史:" in result
         assert "玩家: 旧消息" in result
         assert "旁白: 旧场景" in result
-        assert "guyining: 旧回复" in result
+        assert "shenzhiyi: 旧回复" in result
         assert result.index("最近对话历史:") < result.index("<status>")
         assert result.index("<status>") < result.index("玩家新消息：新输入")
