@@ -9,6 +9,10 @@ const gameTime = ref("秋季 · 第 1 周 · 周三 18:30");
 const message = ref("在校园中心自由探索。靠近人物或出口后按 E。 ");
 const panelOpen = ref(false);
 const gameReady = ref(false);
+const dialogueInput = ref("");
+const dialogueBusy = ref(false);
+const dialogueChoices = ref<string[]>([]);
+const dialogueMessages = ref<Array<{ author: string; content: string; kind?: string }>>([]);
 let game: Phaser.Game | null = null;
 
 const mapLabels: Record<MapId, string> = {
@@ -59,7 +63,7 @@ async function transition(request: { fromMap: MapId; exitId: string }) {
 function interact() {
   if (gameState.value.nearbyNpc) {
     panelOpen.value = true;
-    message.value = `已接近${gameState.value.nearbyNpc.label}。对话面板将在下一里程碑接入 AI。`;
+    message.value = `已接近${gameState.value.nearbyNpc.label}。可以面对面交谈。`;
     return;
   }
   if (gameState.value.nearbyExit?.endDay) {
@@ -67,6 +71,59 @@ function interact() {
     return;
   }
   if (gameState.value.nearbyExit) message.value = `前往${mapLabels[gameState.value.nearbyExit.target]}。`;
+}
+
+function appendDialogue(author: string, content: string, kind = "") {
+  if (content.trim()) dialogueMessages.value.push({ author, content: content.trim(), kind });
+}
+
+async function sendDialogue(content = dialogueInput.value) {
+  const text = content.trim();
+  const target = gameState.value.nearbyNpc;
+  if (!text || !target || dialogueBusy.value) return;
+  dialogueInput.value = "";
+  dialogueBusy.value = true;
+  dialogueChoices.value = [];
+  appendDialogue("我", text, "player");
+  try {
+    const response = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+      body: JSON.stringify({
+        message: text,
+        spatial: {
+          map_id: gameState.value.mapId,
+          primary_target: target.id,
+          visible_to: gameState.value.mapId === "clubroom" ? ["linxi", "shenzhiyi"] : [target.id],
+        },
+      }),
+    });
+    if (!response.ok || !response.body) throw new Error("dialogue request failed");
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    while (true) {
+      const { value, done } = await reader.read();
+      buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done });
+      const events = buffer.split("\n\n");
+      buffer = events.pop() ?? "";
+      for (const raw of events) {
+        const event = raw.match(/^event:\s*(.+)$/m)?.[1]?.trim();
+        const dataText = raw.match(/^data:\s*(.+)$/m)?.[1];
+        if (!event || !dataText) continue;
+        const data = JSON.parse(dataText) as { author?: string; content?: string; choices?: string[] };
+        if (event === "narrator") appendDialogue(data.author ?? "旁白", data.content ?? "", "narrator");
+        if (event === "agent") appendDialogue(data.author ?? target.label, data.content ?? "", "agent");
+        if (event === "choices") dialogueChoices.value = data.choices ?? [];
+        if (event === "response_done") dialogueBusy.value = false;
+      }
+      if (done) break;
+    }
+    dialogueBusy.value = false;
+  } catch {
+    dialogueBusy.value = false;
+    appendDialogue("系统", "对话服务暂不可用，请稍后再试。", "error");
+  }
 }
 
 onMounted(async () => {
@@ -81,7 +138,11 @@ onMounted(async () => {
     message.value = "空间状态服务未连接，使用本地灰盒初始状态。";
   }
   if (gameHost.value) {
-    game = createSpatialGame(gameHost.value, { onState: syncSnapshot, onTransition: transition });
+    game = createSpatialGame(gameHost.value, {
+      onState: syncSnapshot,
+      onTransition: transition,
+      isInputLocked: () => panelOpen.value,
+    });
     gameReady.value = true;
   }
 });
@@ -92,8 +153,10 @@ onUnmounted(() => {
 });
 
 function onKeyDown(event: KeyboardEvent) {
-  if (event.key.toLowerCase() === "e") interact();
-  if (event.key === "Escape") panelOpen.value = false;
+  const target = event.target as HTMLElement | null;
+  const typing = target?.tagName === "INPUT" || target?.tagName === "TEXTAREA";
+  if (event.key.toLowerCase() === "e" && !panelOpen.value && !typing) interact();
+  if (event.key === "Escape" && !dialogueBusy.value) panelOpen.value = false;
 }
 </script>
 
@@ -123,11 +186,23 @@ function onKeyDown(event: KeyboardEvent) {
     <div class="narration-bar">{{ message }}</div>
     <div class="interaction-hint">{{ interactionHint }}</div>
     <section v-if="panelOpen" class="dialogue-panel" aria-live="polite">
-      <button class="close-button" type="button" @click="panelOpen = false">×</button>
+      <button class="close-button" type="button" :disabled="dialogueBusy" @click="panelOpen = false">×</button>
       <p class="eyebrow">面对面交谈</p>
       <h2>{{ gameState.nearbyNpc?.label }}</h2>
-      <p>这是局部对话面板的灰盒占位。下一里程碑将接入 narrator、公开／私语选择和 SSE 回应。</p>
+      <div class="dialogue-log">
+        <p v-for="(item, index) in dialogueMessages" :key="index" :class="['dialogue-line', item.kind]">
+          <strong>{{ item.author }}</strong><span>{{ item.content }}</span>
+        </p>
+        <p v-if="dialogueBusy" class="dialogue-line narrator"><strong>旁白</strong><span>……</span></p>
+      </div>
       <div class="dialogue-mode">公开 · 当前场景中的主要角色可听见</div>
+      <div v-if="dialogueChoices.length" class="dialogue-choices">
+        <button v-for="choice in dialogueChoices" :key="choice" type="button" :disabled="dialogueBusy" @click="sendDialogue(choice)">{{ choice }}</button>
+      </div>
+      <form class="dialogue-composer" @submit.prevent="sendDialogue()">
+        <input v-model="dialogueInput" :disabled="dialogueBusy" placeholder="说点什么……" aria-label="对话输入" />
+        <button type="submit" :disabled="dialogueBusy || !dialogueInput.trim()">发送</button>
+      </form>
     </section>
   </main>
 </template>

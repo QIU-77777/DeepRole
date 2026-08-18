@@ -42,6 +42,9 @@ class NarratorService:
         self,
         user_input: str,
         raw_messages: list[dict] | None = None,
+        *,
+        spatial_context: str = "",
+        persist_scene: bool = True,
     ) -> tuple[LLMNarratorOutput | None, bool]:
         """运行 narrator → 返回 (清洗后的结构化输出, is_valid)。
 
@@ -57,6 +60,7 @@ class NarratorService:
             output = await self._run_narrator(
                 user_input,
                 raw_messages,
+                spatial_context=spatial_context,
                 output_validator=lambda o: self._validate_route_output(o, valid_agents),
             )
         except asyncio.TimeoutError as e:
@@ -81,7 +85,7 @@ class NarratorService:
         is_valid = is_valid_response(output.scene_description, "narrator") and bool(
             output.targets or output.new_characters
         )
-        if is_valid:
+        if is_valid and persist_scene:
             self._write_scene(output)
         return output, is_valid
 
@@ -152,10 +156,13 @@ class NarratorService:
         user_input: str,
         raw_messages: list[dict],
         *,
+        spatial_context: str = "",
         output_validator=None,
     ) -> LLMNarratorOutput:
         """构建 prompt → 运行 narrator SDK，返回 LLMNarratorOutput。"""
         user_message, _ = build_user_message(_NAME, user_input, "", raw_messages=raw_messages)
+        if spatial_context.strip():
+            user_message += f"\n\n<spatial_context>\n{spatial_context.strip()}\n</spatial_context>"
         config = get_llm_config()
         sdk = get_conversation_agent(_NAME)
         return await run_app_agent(

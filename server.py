@@ -14,7 +14,7 @@ from functools import lru_cache
 from pathlib import Path
 
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, field_validator
@@ -657,11 +657,55 @@ async def api_new_game(req: NewGameRequest) -> JSONResponse:
 # =============================================================================
 
 
+class SpatialChatContext(BaseModel):
+    """客户端空间交互上下文；它限制听众，不改变空间状态。"""
+
+    map_id: MapId
+    primary_target: str
+    visible_to: list[str] = []
+
+
 class ChatRequest(BaseModel):
     message: str
+    spatial: SpatialChatContext | None = None
 
 
-async def _chat_stream(user_input: str):
+_SPATIAL_MAP_LABELS = {
+    "campus_center": "校园中心",
+    "arts_hallway": "艺术楼走廊",
+    "clubroom": "剧社活动室",
+    "rooftop": "天台",
+}
+
+
+def _prepare_spatial_context(context: SpatialChatContext) -> tuple[str, list[str], str]:
+    valid_agents = set(get_agent_names(include_narrator=False))
+    if context.primary_target not in valid_agents:
+        raise HTTPException(status_code=400, detail="主要交谈对象不存在。")
+
+    scene_agents = {"linxi", "shenzhiyi"} if context.map_id == "clubroom" else set()
+    audience = [
+        name
+        for name in dict.fromkeys(context.visible_to + [context.primary_target])
+        if name in valid_agents and name in scene_agents
+    ]
+    if context.primary_target not in audience:
+        audience.insert(0, context.primary_target)
+    audience = list(dict.fromkeys(audience))
+    prompt = (
+        f"当前地图：{_SPATIAL_MAP_LABELS[context.map_id]}（{context.map_id}）\n"
+        f"当前主要交谈对象：{context.primary_target}\n"
+        f"当前可听见公开对话的主要角色：{', '.join(audience) or '无'}\n"
+        "空间客户端负责玩家移动和角色在场判定；你只负责叙事路由与回应。"
+    )
+    return prompt, audience, context.primary_target
+
+
+async def _chat_stream(
+    user_input: str,
+    *,
+    spatial_context: tuple[str, list[str], str] | None = None,
+):
     """核心游戏循环，通过 SSE 逐步推送结果。"""
     global _pending_choices_task
     choices_token = _invalidate_pending_choices(clear_saved=True)
@@ -676,9 +720,25 @@ async def _chat_stream(user_input: str):
             routing_logger.warning("state_updater 超时（>60s），done 事件提前发出")
 
     # 1. narrator 路由
-    narrator_output, is_narrator_valid = await narrator_service.route(user_input)
+    spatial_prompt, spatial_audience, primary_target = spatial_context or ("", [], "")
+    is_spatial = spatial_context is not None
+    if is_spatial:
+        narrator_output, is_narrator_valid = await narrator_service.route(
+            user_input,
+            spatial_context=spatial_prompt,
+            persist_scene=False,
+        )
+    else:
+        # Keep the legacy call shape intact for the parallel chat client and its integrations.
+        narrator_output, is_narrator_valid = await narrator_service.route(user_input)
     targets = narrator_output.targets if narrator_output is not None else []
     new_character_specs = narrator_output.new_characters if narrator_output is not None else []
+
+    if is_spatial:
+        # 空间交互不孵化新 NPC；主要交谈对象必须优先回应，最多再追加一名在场角色。
+        new_character_specs = []
+        routed = [name for name in targets if name in spatial_audience and name != primary_target]
+        targets = [primary_target] + routed[:1] if is_narrator_valid else []
 
     # 1.5 处理 narrator 请求的新角色（孵化成功后加入 targets）
     targets, created_new_characters = await bootstrap_new_characters(
@@ -703,8 +763,20 @@ async def _chat_stream(user_input: str):
     # 旁白失败时不把玩家消息写进 raw，避免下一轮上下文里残留没人回应的玩家话语。
     narrator_dump = narrator_output.model_dump() if narrator_output is not None else None
     if is_narrator_valid:
-        await message_router.broadcast_player_message(targets, user_input)
-        current_turn = await message_router.broadcast_narrator_output(targets, narrator_dump)
+        if is_spatial:
+            await message_router.broadcast_player_message(
+                targets,
+                user_input,
+                visible_to=spatial_audience,
+            )
+            current_turn = await message_router.broadcast_narrator_output(
+                targets,
+                narrator_dump,
+                visible_to=spatial_audience,
+            )
+        else:
+            await message_router.broadcast_player_message(targets, user_input)
+            current_turn = await message_router.broadcast_narrator_output(targets, narrator_dump)
     if narrator_dump is not None:
         yield _sse_event(
             "narrator",
@@ -727,11 +799,15 @@ async def _chat_stream(user_input: str):
     agent_responses: list[tuple[str, str]] = []
     for agent_name in targets:
         try:
-            response = await run_agent_in_scene(
-                agent_name,
-                targets,
-                user_input,
-            )
+            if is_spatial:
+                response = await run_agent_in_scene(
+                    agent_name,
+                    targets,
+                    user_input,
+                    visible_to=spatial_audience,
+                )
+            else:
+                response = await run_agent_in_scene(agent_name, targets, user_input)
             if response:
                 agent_responses.append((agent_name, response))
                 yield _sse_event(
@@ -779,8 +855,9 @@ async def _chat_stream(user_input: str):
 
 @app.post("/api/chat")
 async def api_chat(req: ChatRequest) -> StreamingResponse:
+    spatial_context = _prepare_spatial_context(req.spatial) if req.spatial else None
     return StreamingResponse(
-        _chat_stream(req.message),
+        _chat_stream(req.message, spatial_context=spatial_context),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

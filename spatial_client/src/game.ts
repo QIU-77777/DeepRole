@@ -13,6 +13,7 @@ export interface SpatialGameState {
 type Hooks = {
   onState: (state: SpatialGameState) => void;
   onTransition?: (request: { fromMap: MapId; exitId: string }) => Promise<{ mapId: MapId; x: number; y: number } | null>;
+  isInputLocked?: () => boolean;
 };
 
 type MapNpc = { id: string; label: string; x: number; y: number; color: string; interaction: string };
@@ -49,6 +50,10 @@ class SpatialScene extends Phaser.Scene {
 
   update() {
     if (!this.player || !this.cursors) return;
+    if (this.hooks.isInputLocked?.()) {
+      this.player.setVelocity(0, 0);
+      return;
+    }
     const left = this.cursors.left.isDown || this.keys.A.isDown;
     const right = this.cursors.right.isDown || this.keys.D.isDown;
     const up = this.cursors.up.isDown || this.keys.W.isDown;

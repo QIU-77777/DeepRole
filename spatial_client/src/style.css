@@ -26,5 +26,15 @@ h1 { margin-bottom: 0; font-size: clamp(22px, 3vw, 34px); font-weight: 600; }
 .dialogue-panel h2 { margin-bottom: 8px; font-size: 22px; }
 .dialogue-panel p:not(.eyebrow) { color: #d6ddcf; line-height: 1.7; }
 .dialogue-mode { display: inline-flex; padding: 7px 10px; border-radius: 8px; background: #f0c67b1a; color: #f0c67b; font-size: 12px; }
+.dialogue-log { max-height: 230px; overflow: auto; margin: 12px 0; padding-right: 5px; }
+.dialogue-line { display: grid; grid-template-columns: 48px 1fr; gap: 10px; margin: 0 0 9px; font-size: 13px; }
+.dialogue-line strong { color: #f0c67b; font-weight: 600; }
+.dialogue-line.player strong { color: #b9d8bd; }
+.dialogue-line.error strong { color: #e58d78; }
+.dialogue-choices { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
+.dialogue-choices button, .dialogue-composer button { border: 1px solid #f0c67b55; border-radius: 8px; background: #f0c67b18; color: #f8f0dc; padding: 7px 10px; cursor: pointer; }
+.dialogue-composer { display: flex; gap: 8px; margin-top: 14px; }
+.dialogue-composer input { min-width: 0; flex: 1; border: 1px solid #f4e7c733; border-radius: 8px; background: #0e1915cc; color: #f8f0dc; padding: 9px 10px; outline: none; }
+.dialogue-composer button:disabled, .dialogue-choices button:disabled, .close-button:disabled { cursor: not-allowed; opacity: .5; }
 .close-button { position: absolute; top: 14px; right: 16px; color: #d6ddcf; font-size: 24px; cursor: pointer; }
 @media (max-width: 720px) { .hud-top { top: 14px; left: 14px; right: 14px; } .minimap { top: 104px; right: 14px; } .dialogue-panel { right: 14px; bottom: 14px; width: calc(100% - 28px); } }
