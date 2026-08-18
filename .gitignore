@@ -24,6 +24,10 @@ skills-lock.json
 .vscode/
 .DS_Store
 
+# 空间客户端本地依赖与构建产物
+spatial_client/node_modules/
+spatial_client/dist/
+
 # 本地重构规划草稿，不入库
 docs/refactor-clean-arch.md
 

@@ -7,6 +7,7 @@ load_dotenv()
 
 import asyncio
 import json
+import math
 import re
 import traceback
 from functools import lru_cache
@@ -14,9 +15,9 @@ from pathlib import Path
 
 
 from fastapi import FastAPI
-from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from app.agent_factory import initialize_conversation_agents, reload_conversation_agent
 from app.consolidation.flow import memory_consolidation_flow
@@ -56,6 +57,8 @@ from repository.history import (
     search_history,
 )
 from repository.message_router import message_router
+from repository.spatial_state import read_spatial_state, reset_spatial_state, update_player_snapshot, write_spatial_state
+from models.spatial import MapId, SpatialState, transition_spatial_state
 
 
 def reset_entities() -> None:
@@ -66,6 +69,7 @@ def reset_entities() -> None:
 app = FastAPI(title="DeepRole")
 
 STATIC_DIR = Path(__file__).parent / "static"
+SPATIAL_DIST_DIR = Path(__file__).parent / "spatial_client" / "dist"
 _LAST_CHOICES_FILE = CHARACTERS_DIR / "last_choices.json"
 _pending_state_update_task: asyncio.Task[None] | None = None
 _pending_state_update_requested = False
@@ -416,6 +420,84 @@ async def index() -> HTMLResponse:
     return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
 
 
+@app.get("/game", response_class=HTMLResponse)
+async def spatial_game() -> HTMLResponse:
+    """空间化客户端入口；旧聊天入口 / 保持不变。"""
+    index_path = SPATIAL_DIST_DIR / "index.html"
+    if not index_path.exists():
+        return HTMLResponse(
+            "<h1>空间客户端尚未构建</h1><p>进入 spatial_client 后运行 npm install && npm run build。</p>",
+            status_code=503,
+        )
+    return HTMLResponse(content=index_path.read_text(encoding="utf-8"))
+
+
+@app.get("/game/{asset_path:path}")
+async def spatial_asset(asset_path: str):
+    """为 Vite 构建产物提供同源静态资源与 SPA fallback。"""
+    index_path = SPATIAL_DIST_DIR / "index.html"
+    if not index_path.exists():
+        return JSONResponse({"detail": "空间客户端尚未构建。"}, status_code=503)
+    candidate = (SPATIAL_DIST_DIR / asset_path).resolve()
+    try:
+        candidate.relative_to(SPATIAL_DIST_DIR.resolve())
+    except ValueError:
+        return JSONResponse({"detail": "非法资源路径。"}, status_code=404)
+    if candidate.is_file():
+        return FileResponse(candidate)
+    return FileResponse(index_path)
+
+
+def _spatial_state_payload(state: SpatialState) -> dict:
+    payload = state.model_dump()
+    payload["story_time"]["display"] = state.story_time.display
+    return payload
+
+
+class SpatialSnapshotRequest(BaseModel):
+    map_id: MapId
+    x: float
+    y: float
+
+    @field_validator("x", "y")
+    @classmethod
+    def _ensure_finite(cls, value: float) -> float:
+        if not math.isfinite(value):
+            raise ValueError("坐标必须是有限数字。")
+        return value
+
+
+class SpatialTransitionRequest(BaseModel):
+    from_map: MapId
+    exit_id: str
+
+
+@app.get("/api/spatial/state")
+async def api_spatial_state() -> JSONResponse:
+    return JSONResponse(_spatial_state_payload(read_spatial_state()))
+
+
+@app.post("/api/spatial/snapshot")
+async def api_spatial_snapshot(req: SpatialSnapshotRequest) -> JSONResponse:
+    current = read_spatial_state()
+    if current.player.map_id != req.map_id:
+        return JSONResponse({"detail": "地图必须通过有效出口转换。"}, status_code=409)
+    state = update_player_snapshot(map_id=req.map_id, x=req.x, y=req.y)
+    return JSONResponse(_spatial_state_payload(state))
+
+
+@app.post("/api/spatial/transition")
+async def api_spatial_transition(req: SpatialTransitionRequest) -> JSONResponse:
+    state = read_spatial_state()
+    try:
+        updated = transition_spatial_state(state, from_map=req.from_map, exit_id=req.exit_id)
+    except ValueError:
+        return JSONResponse({"detail": "当前地图与请求不一致。"}, status_code=409)
+    except KeyError:
+        return JSONResponse({"detail": "出口不存在或不可用。"}, status_code=404)
+    return JSONResponse(_spatial_state_payload(write_spatial_state(updated)))
+
+
 # =============================================================================
 # /api/init
 # =============================================================================
@@ -549,6 +631,7 @@ async def api_new_game(req: NewGameRequest) -> JSONResponse:
     _invalidate_pending_choices(clear_saved=True)
     await _settle_pending_state_update(cancel=True)
     intro_text, opening_text = await reset_game(req.story_id)
+    reset_spatial_state()
     reset_entities()
     for name in get_agent_names(include_narrator=True):
         reload_conversation_agent(name)
@@ -887,6 +970,7 @@ async def api_reset(req: ResetRequest) -> JSONResponse:
     _invalidate_pending_choices(clear_saved=True)
     await _settle_pending_state_update(cancel=True)
     intro_text, opening_text = await reset_game(req.story_id)
+    reset_spatial_state()
     reset_entities()
     for name in get_agent_names(include_narrator=True):
         reload_conversation_agent(name)

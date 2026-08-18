@@ -1,0 +1,37 @@
+import pytest
+
+from models.spatial import StoryTime, advance_story_time, transition_spatial_state
+import repository.spatial_state as spatial_state
+
+
+def test_story_time_advances_across_week_boundary() -> None:
+    current = StoryTime(week=1, weekday="周日", minute_of_day=23 * 60 + 50)
+    updated = advance_story_time(current, 20)
+
+    assert updated.week == 2
+    assert updated.weekday == "周一"
+    assert updated.minute_of_day == 10
+
+
+def test_spatial_state_round_trip_uses_local_json(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(spatial_state, "STATE_PATH", tmp_path / "spatial_state.json")
+    monkeypatch.setattr(spatial_state, "CHARACTERS_DIR", tmp_path)
+
+    state = spatial_state.default_spatial_state()
+    spatial_state.write_spatial_state(state)
+    restored = spatial_state.read_spatial_state()
+
+    assert restored == state
+    assert restored.player.map_id == "campus_center"
+
+
+def test_transition_validates_exit_and_advances_story_time() -> None:
+    state = spatial_state.default_spatial_state()
+    updated = transition_spatial_state(state, from_map="campus_center", exit_id="to_arts_hallway")
+
+    assert updated.player.map_id == "arts_hallway"
+    assert updated.player.spawn_id == "arts_hallway_west"
+    assert updated.story_time.minute_of_day == 18 * 60 + 40
+
+    with pytest.raises(KeyError):
+        transition_spatial_state(updated, from_map="arts_hallway", exit_id="missing")
