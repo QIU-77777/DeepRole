@@ -28,6 +28,8 @@ const saves = ref<Array<{ filename: string; title?: string; created_at?: string 
 const availableEvent = ref<{ event_id: string; label: string; prompt: string } | null>(null);
 let npcLocations: Record<string, MapId> = {};
 let npcWaypoints: Record<string, string> = {};
+let initialMapId: MapId = "campus_center";
+let initialPlayer: { x: number; y: number } | undefined;
 let dialogueController: AbortController | null = null;
 let game: Phaser.Game | null = null;
 
@@ -329,6 +331,9 @@ onMounted(async () => {
       gameTime.value = state.story_time.display;
       gameWeather.value = state.weather ?? gameWeather.value;
       gamePhase.value = state.day_phase ?? gamePhase.value;
+      initialMapId = state.player?.map_id ?? initialMapId;
+      initialPlayer = state.player ? { x: state.player.x, y: state.player.y } : undefined;
+      message.value = `在${mapLabels[initialMapId]}自由探索。靠近人物或出口后按 E。`;
       npcLocations = state.npc_locations ?? {};
       npcWaypoints = state.npc_waypoints ?? {};
       availableEvent.value = state.available_events?.[0] ?? null;
@@ -343,6 +348,8 @@ onMounted(async () => {
       isInputLocked: () => panelOpen.value,
       npcLocations,
       npcWaypoints,
+      mapId: initialMapId,
+      initialPlayer,
     });
     gameReady.value = true;
   }

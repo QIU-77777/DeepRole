@@ -25,6 +25,8 @@ type Hooks = {
     npcWaypoints?: Record<string, string>;
   } | null>;
   isInputLocked?: () => boolean;
+  mapId?: MapId;
+  initialPlayer?: { x: number; y: number };
   npcLocations?: Record<string, MapId>;
   npcWaypoints?: Record<string, string>;
 };
@@ -60,13 +62,16 @@ class SpatialScene extends Phaser.Scene {
     super("spatial-scene");
   }
 
-  create(data: { hooks: Hooks; mapId?: MapId; spawn?: { x: number; y: number } }) {
+  create(data: { hooks: Hooks }) {
     this.hooks = data.hooks;
     this.npcLocations = data.hooks.npcLocations ?? {};
     this.npcWaypoints = data.hooks.npcWaypoints ?? {};
     this.cursors = this.input.keyboard!.createCursorKeys();
     this.keys = this.input.keyboard!.addKeys("W,A,S,D,E") as Record<string, Phaser.Input.Keyboard.Key>;
-    this.loadMap(data.mapId ?? "campus_center", data.spawn);
+    const initialSpawn = data.hooks.initialPlayer
+      ? { x: data.hooks.initialPlayer.x / mapData.tileSize - 0.5, y: data.hooks.initialPlayer.y / mapData.tileSize - 0.5 }
+      : undefined;
+    this.loadMap(data.hooks.mapId ?? "campus_center", initialSpawn);
   }
 
   update() {
