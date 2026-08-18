@@ -43,7 +43,7 @@
       ],
       "exits": [
         { "id": "to_campus_center", "x": 0, "y": 8, "w": 2, "h": 4, "target": "campus_center", "spawn": { "x": 29, "y": 10 }, "minutes": 10 },
-        { "id": "to_clubroom", "x": 8, "y": 0, "w": 4, "h": 2, "target": "clubroom", "spawn": { "x": 12, "y": 13 }, "minutes": 5 }
+        { "id": "to_clubroom", "x": 8, "y": 0, "w": 4, "h": 2, "target": "clubroom", "spawn": { "x": 12, "y": 12 }, "minutes": 5 }
       ],
       "waypoints": {
         "hall_north": { "x": 12, "y": 3 },

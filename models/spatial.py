@@ -193,7 +193,7 @@ def advance_story_time(story_time: StoryTime, minutes: int) -> StoryTime:
 SPATIAL_TRANSITIONS: dict[tuple[MapId, str], dict[str, object]] = {
     ("campus_center", "to_arts_hallway"): {"target": "arts_hallway", "spawn_id": "arts_hallway_west", "x": 80.0, "y": 336.0, "minutes": 10},
     ("arts_hallway", "to_campus_center"): {"target": "campus_center", "spawn_id": "campus_center_east", "x": 944.0, "y": 336.0, "minutes": 10},
-    ("arts_hallway", "to_clubroom"): {"target": "clubroom", "spawn_id": "clubroom_door", "x": 400.0, "y": 432.0, "minutes": 5},
+    ("arts_hallway", "to_clubroom"): {"target": "clubroom", "spawn_id": "clubroom_door", "x": 400.0, "y": 400.0, "minutes": 5},
     ("clubroom", "to_arts_hallway"): {"target": "arts_hallway", "spawn_id": "arts_hallway_clubroom", "x": 336.0, "y": 112.0, "minutes": 5},
     ("clubroom", "to_rooftop"): {"target": "rooftop", "spawn_id": "rooftop_stairs", "x": 80.0, "y": 240.0, "minutes": 5},
     ("rooftop", "to_clubroom"): {"target": "clubroom", "spawn_id": "clubroom_rooftop", "x": 528.0, "y": 208.0, "minutes": 5},

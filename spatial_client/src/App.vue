@@ -30,6 +30,8 @@ let npcLocations: Record<string, MapId> = {};
 let npcWaypoints: Record<string, string> = {};
 let initialMapId: MapId = "campus_center";
 let initialPlayer: { x: number; y: number } | undefined;
+let snapshotTimer: ReturnType<typeof setTimeout> | null = null;
+let pendingSnapshot: SpatialGameState | null = null;
 let dialogueController: AbortController | null = null;
 let game: Phaser.Game | null = null;
 
@@ -51,15 +53,23 @@ const interactionHint = computed(() => {
 async function syncSnapshot(state: SpatialGameState) {
   gameState.value = state;
   if (!gameReady.value) return;
-  try {
-    await fetch("/api/spatial/snapshot", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ map_id: state.mapId, x: state.player.x, y: state.player.y }),
-    });
-  } catch {
-    message.value = "空间状态服务暂不可用，当前仍可继续灰盒探索。";
-  }
+  pendingSnapshot = state;
+  if (snapshotTimer) return;
+  snapshotTimer = setTimeout(async () => {
+    snapshotTimer = null;
+    const latest = pendingSnapshot;
+    pendingSnapshot = null;
+    if (!latest) return;
+    try {
+      await fetch("/api/spatial/snapshot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ map_id: latest.mapId, x: latest.player.x, y: latest.player.y }),
+      });
+    } catch {
+      message.value = "空间状态服务暂不可用，当前仍可继续灰盒探索。";
+    }
+  }, 120);
 }
 
 async function transition(request: { fromMap: MapId; exitId: string }) {
@@ -357,6 +367,9 @@ onMounted(async () => {
 
 onUnmounted(() => {
   window.removeEventListener("keydown", onKeyDown);
+  if (snapshotTimer) clearTimeout(snapshotTimer);
+  snapshotTimer = null;
+  pendingSnapshot = null;
   game?.destroy(true);
 });
 

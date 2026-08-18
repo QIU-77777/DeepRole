@@ -49,6 +49,10 @@ def test_transition_validates_exit_and_advances_story_time() -> None:
     assert updated.player.spawn_id == "arts_hallway_west"
     assert updated.story_time.minute_of_day == 18 * 60 + 40
 
+    clubroom = transition_spatial_state(updated, from_map="arts_hallway", exit_id="to_clubroom")
+    assert clubroom.player.spawn_id == "clubroom_door"
+    assert clubroom.player.y == 400.0
+
     with pytest.raises(KeyError):
         transition_spatial_state(updated, from_map="arts_hallway", exit_id="missing")
 
