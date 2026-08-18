@@ -13,6 +13,7 @@ const dialogueInput = ref("");
 const dialogueBusy = ref(false);
 const dialogueChoices = ref<string[]>([]);
 const dialogueMessages = ref<Array<{ author: string; content: string; kind?: string }>>([]);
+let npcLocations: Record<string, MapId> = {};
 let game: Phaser.Game | null = null;
 
 const mapLabels: Record<MapId, string> = {
@@ -133,6 +134,7 @@ onMounted(async () => {
     if (response.ok) {
       const state = await response.json();
       gameTime.value = state.story_time.display;
+      npcLocations = state.npc_locations ?? {};
     }
   } catch {
     message.value = "空间状态服务未连接，使用本地灰盒初始状态。";
@@ -142,6 +144,7 @@ onMounted(async () => {
       onState: syncSnapshot,
       onTransition: transition,
       isInputLocked: () => panelOpen.value,
+      npcLocations,
     });
     gameReady.value = true;
   }

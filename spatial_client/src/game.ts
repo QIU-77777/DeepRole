@@ -14,6 +14,7 @@ type Hooks = {
   onState: (state: SpatialGameState) => void;
   onTransition?: (request: { fromMap: MapId; exitId: string }) => Promise<{ mapId: MapId; x: number; y: number } | null>;
   isInputLocked?: () => boolean;
+  npcLocations?: Record<string, MapId>;
 };
 
 type MapNpc = { id: string; label: string; x: number; y: number; color: string; interaction: string };
@@ -36,6 +37,7 @@ class SpatialScene extends Phaser.Scene {
   private lastPublished = "";
   private nameLabels: Phaser.GameObjects.Text[] = [];
   private transitioning = false;
+  private npcLocations: Record<string, MapId> = {};
 
   constructor() {
     super("spatial-scene");
@@ -43,6 +45,7 @@ class SpatialScene extends Phaser.Scene {
 
   create(data: { hooks: Hooks; mapId?: MapId; spawn?: { x: number; y: number } }) {
     this.hooks = data.hooks;
+    this.npcLocations = data.hooks.npcLocations ?? {};
     this.cursors = this.input.keyboard!.createCursorKeys();
     this.keys = this.input.keyboard!.addKeys("W,A,S,D,E") as Record<string, Phaser.Input.Keyboard.Key>;
     this.loadMap(data.mapId ?? "campus_center", data.spawn);
@@ -99,7 +102,10 @@ class SpatialScene extends Phaser.Scene {
     this.physics.add.collider(this.player, this.walls);
     this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
     this.cameras.main.setDeadzone(160, 96);
-    for (const npc of definition.npcs) this.addNpc(npc);
+    for (const npc of definition.npcs) {
+      const location = this.npcLocations[npc.id];
+      if (!location || location === mapId) this.addNpc(npc);
+    }
     for (const exit of definition.exits) this.addExit(exit);
     this.publishState(true);
   }
