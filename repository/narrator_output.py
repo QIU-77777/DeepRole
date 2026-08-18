@@ -14,6 +14,7 @@ NARRATOR_OUTPUT_FIELDS = (
     "location",
     "present_characters",
     "scene_description",
+    "display_text",
     "new_characters",
 )
 

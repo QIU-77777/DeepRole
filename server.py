@@ -817,7 +817,7 @@ async def _chat_stream(
         yield _sse_event(
             "narrator",
             {
-                "content": narrator_output.scene_description,
+                "content": narrator_output.display_text or narrator_output.scene_description,
                 "author": "旁白",
                 "payload": narrator_dump,
             },

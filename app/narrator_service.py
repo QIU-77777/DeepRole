@@ -74,6 +74,7 @@ class NarratorService:
             update={
                 "targets": [t for t in output.targets if t in valid_agents],
                 "scene_description": self._sanitize_scene_description(output.scene_description),
+                "display_text": self._sanitize_scene_description(output.display_text),
                 "new_characters": self._filter_new_characters(output.new_characters, valid_agents),
             }
         )

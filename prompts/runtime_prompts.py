@@ -159,6 +159,7 @@ Return the result in this exact JSON format:
     "角色显示名": "位置/站位/简短状态"
   }},
   "scene_description": "一两句环境、气氛或转场描写",
+  "display_text": "可选的一句玩家可直接看到的旁白；没有时留空",
   "character_locations": {{
     "玩家显示名": "此刻在哪里或在做什么",
     "角色显示名": "此刻在哪里或在做什么"

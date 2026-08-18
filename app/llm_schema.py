@@ -60,6 +60,7 @@ class LLMNarratorOutput(BaseModel):
     location: str
     present_characters: dict[str, str]
     scene_description: str
+    display_text: str = ""
     character_locations: dict[str, str] = Field(default_factory=dict)
     new_characters: list[LLMNewCharacterRequest] = Field(default_factory=list)
 

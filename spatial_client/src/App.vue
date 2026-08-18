@@ -14,6 +14,11 @@ const dialogueBusy = ref(false);
 const dialogueChoices = ref<string[]>([]);
 const dialogueMessages = ref<Array<{ author: string; content: string; kind?: string }>>([]);
 const dialogueVisibility = ref<"public" | "private">("public");
+const profileOpen = ref(false);
+const profileLoading = ref(false);
+const profileAgent = ref("linxi");
+const profileData = ref<{ selected_display_name?: string; nodes?: Array<{ id: string; label?: string; group?: string; meta?: { content?: string; content_preview?: string; raw_dialogue_preview?: string; type_label?: string } }>; stats?: { episode_count?: number; understanding_count?: number } } | null>(null);
+const relationshipData = ref<Record<string, { stage: string; tags: string[]; description: string }>>({});
 let npcLocations: Record<string, MapId> = {};
 let game: Phaser.Game | null = null;
 
@@ -92,6 +97,28 @@ async function endDay() {
   }
 }
 
+async function openProfile(agent = gameState.value.nearbyNpc?.id ?? profileAgent.value) {
+  profileAgent.value = agent;
+  profileOpen.value = true;
+  profileLoading.value = true;
+  try {
+    const [graphResponse, relationshipResponse] = await Promise.all([
+      fetch(`/api/memory-graph?agent=${encodeURIComponent(agent)}`),
+      fetch("/api/relationships"),
+    ]);
+    if (!graphResponse.ok) throw new Error("profile failed");
+    profileData.value = await graphResponse.json();
+    if (relationshipResponse.ok) {
+      const payload = await relationshipResponse.json();
+      relationshipData.value = payload.characters ?? {};
+    }
+  } catch {
+    message.value = "人物档案暂不可用。";
+  } finally {
+    profileLoading.value = false;
+  }
+}
+
 function appendDialogue(author: string, content: string, kind = "") {
   if (content.trim()) dialogueMessages.value.push({ author, content: content.trim(), kind });
 }
@@ -139,7 +166,10 @@ async function sendDialogue(content = dialogueInput.value) {
           story_time?: { display?: string };
           npc_locations?: Record<string, MapId>;
         };
-        if (event === "narrator") appendDialogue(data.author ?? "旁白", data.content ?? "", "narrator");
+        if (event === "narrator") {
+          appendDialogue(data.author ?? "旁白", data.content ?? "", "narrator");
+          message.value = data.content ?? message.value;
+        }
         if (event === "agent") appendDialogue(data.author ?? target.label, data.content ?? "", "agent");
         if (event === "choices") dialogueChoices.value = data.choices ?? [];
         if (event === "spatial_state") {
@@ -207,6 +237,7 @@ function onKeyDown(event: KeyboardEvent) {
       <div class="time-card">
         <span>{{ gameTime }}</span>
         <small>叙事时间 · 秋季</small>
+        <button class="profile-button" type="button" @click="openProfile()">人物档案</button>
       </div>
     </header>
     <aside class="minimap" aria-label="小地图">
@@ -246,5 +277,26 @@ function onKeyDown(event: KeyboardEvent) {
         <button type="submit" :disabled="dialogueBusy || !dialogueInput.trim()">发送</button>
       </form>
     </section>
+    <aside v-if="profileOpen" class="profile-panel" aria-live="polite">
+      <button class="close-button" type="button" @click="profileOpen = false">×</button>
+      <p class="eyebrow">人物档案 · 私有记忆</p>
+      <h2>{{ profileData?.selected_display_name ?? profileAgent }}</h2>
+      <div v-if="relationshipData[profileAgent]" class="profile-relation">
+        <strong>{{ relationshipData[profileAgent].stage }}</strong>
+        <span>{{ relationshipData[profileAgent].description }}</span>
+      </div>
+      <p v-if="profileLoading">正在读取记忆图……</p>
+      <template v-else>
+        <p class="profile-stats">事件 {{ profileData?.stats?.episode_count ?? 0 }} · 理解 {{ profileData?.stats?.understanding_count ?? 0 }}</p>
+        <div class="profile-memory-list">
+          <article v-for="node in profileData?.nodes ?? []" :key="node.id">
+            <small>{{ node.group === "understanding" ? "长期理解" : "经历" }}</small>
+            <strong>{{ node.label }}</strong>
+            <p>{{ node.meta?.content || node.meta?.content_preview || "（暂无详细内容）" }}</p>
+            <pre v-if="node.meta?.raw_dialogue_preview">{{ node.meta.raw_dialogue_preview }}</pre>
+          </article>
+        </div>
+      </template>
+    </aside>
   </main>
 </template>
