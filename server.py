@@ -27,6 +27,7 @@ from app.conversation_flow import (
     bootstrap_new_characters,
     generate_choices,
     run_agent_in_scene,
+    run_silent_listener,
 )
 from app.memory.indexer import rebuild_memory_index, rebuild_understanding_index
 from repository.character_repo import character_repo
@@ -720,7 +721,12 @@ def _prepare_spatial_context(context: SpatialChatContext) -> tuple[str, list[str
     if context.primary_target not in valid_agents:
         raise HTTPException(status_code=400, detail="主要交谈对象不存在。")
 
-    scene_agents = {"linxi", "shenzhiyi"} if context.map_id == "clubroom" else set()
+    spatial_state = read_spatial_state()
+    if spatial_state.npc_locations.get(context.primary_target) != context.map_id:
+        raise HTTPException(status_code=409, detail="主要交谈对象当前不在这个区域。")
+    scene_agents = {
+        name for name, map_id in spatial_state.npc_locations.items() if map_id == context.map_id
+    }
     audience = [
         name
         for name in dict.fromkeys(context.visible_to + [context.primary_target])
@@ -860,6 +866,13 @@ async def _chat_stream(
             yield _sse_event(
                 "agent",
                 {"content": f"（{_get_agent_display_name(agent_name)}暂时无法回应，请稍后再试）", "author": _get_agent_display_name(agent_name)},
+            )
+
+    if is_spatial:
+        silent_listeners = [name for name in spatial_audience if name not in targets]
+        if silent_listeners:
+            await asyncio.gather(
+                *(run_silent_listener(name, user_input) for name in silent_listeners)
             )
 
     if is_spatial and agent_responses:

@@ -8,6 +8,7 @@ from app.agent_factory import get_choices_agent
 from repository.sdk_runner import run_structured_agent
 from app.llm_schema import LLMChoices, LLMNarratorOutput, LLMNewCharacterRequest
 from app.conversation_service import conversation_service
+from app.conversation_service import ConversationService
 from app.character_factory import CreatedCharacterInfo, create_character
 from repository.character_repo import character_repo
 from app.prompt_builder import build_history_transcript
@@ -108,3 +109,11 @@ async def run_agent_in_scene(
             interaction_id=interaction_id,
         )
     return response
+
+
+async def run_silent_listener(agent_name: str, user_input: str) -> None:
+    """让同场但未被路由为发言者的角色吸收本轮可见内容。"""
+    listener_service = ConversationService()
+    character = character_repo.load(agent_name)
+    await listener_service.run_turn(character, user_input)
+    listener_service.consume_tool_results()

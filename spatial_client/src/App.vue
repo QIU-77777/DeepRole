@@ -123,8 +123,8 @@ async function openProfile(agent = gameState.value.nearbyNpc?.id ?? profileAgent
   }
 }
 
-async function saveWorldline() {
-  if (saveBusy.value) return;
+async function saveWorldline(): Promise<boolean> {
+  if (saveBusy.value) return false;
   saveBusy.value = true;
   saveNotice.value = "正在等待后台记忆整理……";
   try {
@@ -137,8 +137,10 @@ async function saveWorldline() {
     if (!response.ok) throw new Error(payload.detail || "save failed");
     saveNotice.value = `世界线已保存：${payload.filename}`;
     await refreshSaves();
+    return true;
   } catch (error) {
     saveNotice.value = error instanceof Error ? error.message : "保存失败。";
+    return false;
   } finally {
     saveBusy.value = false;
   }
@@ -152,7 +154,10 @@ async function refreshSaves() {
 }
 
 async function loadWorldline(filename: string) {
-  if (!window.confirm("读取旧世界线？当前未手动保存的进度将无法回滚。")) return;
+  if (!window.confirm("即将读取旧世界线。是否继续进入读取确认？")) return;
+  const saveFirst = window.confirm("是否先创建一个手动保存节点？确定保存，取消则不创建节点。 ");
+  if (saveFirst && !(await saveWorldline())) return;
+  if (!window.confirm("确认读取这个旧世界线？未手动保存的中间状态将无法回滚。")) return;
   const response = await fetch("/api/load", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
