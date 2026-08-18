@@ -95,6 +95,7 @@ class ConversationService:
                 "ok": True,
                 "npc_id": agent_name,
                 "destination": call.destination,
+                "route": updated.npc_routes.get(agent_name, []),
             })
         return results
 

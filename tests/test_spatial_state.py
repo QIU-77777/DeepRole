@@ -1,6 +1,6 @@
 import pytest
 
-from models.spatial import StoryTime, SpatialState, advance_story_time, apply_npc_schedules, apply_story_environment, available_spatial_events, end_story_day, move_npc, transition_spatial_state, trigger_spatial_event
+from models.spatial import StoryTime, SpatialState, advance_story_time, apply_npc_schedules, apply_story_environment, available_spatial_events, end_story_day, find_map_route, move_npc, transition_spatial_state, trigger_spatial_event
 import repository.spatial_state as spatial_state
 
 
@@ -88,3 +88,15 @@ def test_weather_and_day_phase_come_from_story_time() -> None:
 
     assert projected.weather == "晴朗"
     assert projected.day_phase == "夜间"
+
+
+def test_npc_route_uses_scene_exit_graph() -> None:
+    assert find_map_route("campus_center", "rooftop") == [
+        "campus_center",
+        "arts_hallway",
+        "clubroom",
+        "rooftop",
+    ]
+    state = SpatialState(npc_locations={"linxi": "campus_center"})
+    moved = move_npc(state, npc_id="linxi", destination="rooftop")
+    assert moved.npc_routes["linxi"] == ["campus_center", "arts_hallway", "clubroom", "rooftop"]

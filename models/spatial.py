@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, cast
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -49,6 +49,7 @@ class SpatialState(BaseModel):
     active_followers: list[str] = Field(default_factory=list)
     npc_locations: dict[str, MapId] = Field(default_factory=dict)
     npc_overrides: dict[str, MapId] = Field(default_factory=dict)
+    npc_routes: dict[str, list[MapId]] = Field(default_factory=dict)
     triggered_events: list[str] = Field(default_factory=list)
 
     @property
@@ -175,6 +176,37 @@ SPATIAL_TRANSITIONS: dict[tuple[MapId, str], dict[str, object]] = {
 }
 
 
+def find_map_route(start: MapId, destination: MapId) -> list[MapId]:
+    """在互联场景图上计算最短语义路线；路线不含坐标。"""
+    if start == destination:
+        return [start]
+    queue: list[MapId] = [start]
+    parents: dict[MapId, MapId | None] = {start: None}
+    while queue:
+        current = queue.pop(0)
+        neighbors = [
+            target
+            for (source, _exit_id), transition in SPATIAL_TRANSITIONS.items()
+            if source == current
+            for target in [transition["target"]]
+        ]
+        for neighbor in neighbors:
+            next_map = cast(MapId, neighbor)
+            if next_map in parents:
+                continue
+            parents[next_map] = current
+            if next_map == destination:
+                route: list[MapId] = [destination]
+                cursor: MapId | None = current
+                while cursor is not None:
+                    route.append(cursor)
+                    cursor = parents[cursor]
+                route.reverse()
+                return route
+            queue.append(next_map)
+    raise KeyError(destination)
+
+
 def transition_spatial_state(state: SpatialState, *, from_map: MapId, exit_id: str) -> SpatialState:
     """验证并应用一个地图出口转换。"""
     if state.player.map_id != from_map:
@@ -199,10 +231,18 @@ def move_npc(state: SpatialState, *, npc_id: str, destination: MapId) -> Spatial
     if npc_id not in SPATIAL_NPC_IDS:
         raise KeyError(npc_id)
     locations = dict(state.npc_locations)
+    current = locations.get(npc_id, destination)
+    route = find_map_route(current, destination)
     locations[npc_id] = destination
     overrides = dict(state.npc_overrides)
     overrides[npc_id] = destination
-    return state.model_copy(update={"npc_locations": locations, "npc_overrides": overrides})
+    routes = dict(state.npc_routes)
+    routes[npc_id] = route
+    return state.model_copy(update={
+        "npc_locations": locations,
+        "npc_overrides": overrides,
+        "npc_routes": routes,
+    })
 
 
 def end_story_day(state: SpatialState) -> SpatialState:
@@ -220,5 +260,6 @@ def end_story_day(state: SpatialState) -> SpatialState:
             "y": 336.0,
         }),
         "npc_overrides": {},
+        "npc_routes": {},
     })
     return apply_story_environment(apply_npc_schedules(updated))
