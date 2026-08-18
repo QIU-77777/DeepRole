@@ -1,6 +1,6 @@
 import pytest
 
-from models.spatial import StoryTime, advance_story_time, transition_spatial_state
+from models.spatial import StoryTime, SpatialState, advance_story_time, move_npc, transition_spatial_state
 import repository.spatial_state as spatial_state
 
 
@@ -35,3 +35,15 @@ def test_transition_validates_exit_and_advances_story_time() -> None:
 
     with pytest.raises(KeyError):
         transition_spatial_state(updated, from_map="arts_hallway", exit_id="missing")
+
+
+def test_npc_move_uses_semantic_destination_only() -> None:
+    state = SpatialState(npc_locations={"linxi": "clubroom"})
+    moved = move_npc(state, npc_id="linxi", destination="rooftop")
+
+    assert moved.npc_locations == {"linxi": "rooftop"}
+
+
+def test_npc_move_rejects_unknown_npc() -> None:
+    with pytest.raises(KeyError):
+        move_npc(SpatialState(), npc_id="unknown", destination="rooftop")

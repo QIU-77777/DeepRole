@@ -7,6 +7,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 MapId = Literal["campus_center", "arts_hallway", "clubroom", "rooftop"]
+SpatialNpcId = Literal["linxi", "shenzhiyi"]
 WEEKDAYS = ("周一", "周二", "周三", "周四", "周五", "周六", "周日")
 
 
@@ -52,6 +53,9 @@ class SpatialState(BaseModel):
         return self.story_time.display
 
 
+SPATIAL_NPC_IDS: tuple[str, ...] = ("linxi", "shenzhiyi")
+
+
 def advance_story_time(story_time: StoryTime, minutes: int) -> StoryTime:
     """推进叙事时间；只接受系统已校验的非负时长。"""
     if minutes < 0:
@@ -91,3 +95,12 @@ def transition_spatial_state(state: SpatialState, *, from_map: MapId, exit_id: s
             "y": float(transition["y"]),
         }),
     })
+
+
+def move_npc(state: SpatialState, *, npc_id: str, destination: MapId) -> SpatialState:
+    """通过语义 waypoint 移动 NPC；领域层不接受坐标或文本传送。"""
+    if npc_id not in SPATIAL_NPC_IDS:
+        raise KeyError(npc_id)
+    locations = dict(state.npc_locations)
+    locations[npc_id] = destination
+    return state.model_copy(update={"npc_locations": locations})

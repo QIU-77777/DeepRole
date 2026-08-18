@@ -58,7 +58,7 @@ from repository.history import (
 )
 from repository.message_router import message_router
 from repository.spatial_state import read_spatial_state, reset_spatial_state, update_player_snapshot, write_spatial_state
-from models.spatial import MapId, SpatialState, transition_spatial_state
+from models.spatial import MapId, SpatialState, move_npc, transition_spatial_state
 
 
 def reset_entities() -> None:
@@ -472,6 +472,12 @@ class SpatialTransitionRequest(BaseModel):
     exit_id: str
 
 
+class SpatialNpcMoveRequest(BaseModel):
+    npc_id: str
+    destination: MapId
+    reason: str = ""
+
+
 @app.get("/api/spatial/state")
 async def api_spatial_state() -> JSONResponse:
     return JSONResponse(_spatial_state_payload(read_spatial_state()))
@@ -495,6 +501,17 @@ async def api_spatial_transition(req: SpatialTransitionRequest) -> JSONResponse:
         return JSONResponse({"detail": "当前地图与请求不一致。"}, status_code=409)
     except KeyError:
         return JSONResponse({"detail": "出口不存在或不可用。"}, status_code=404)
+    return JSONResponse(_spatial_state_payload(write_spatial_state(updated)))
+
+
+@app.post("/api/spatial/npc/move")
+async def api_spatial_npc_move(req: SpatialNpcMoveRequest) -> JSONResponse:
+    """语义 NPC 移动工具边界：调用方只能给角色和目的地，不能写坐标。"""
+    state = read_spatial_state()
+    try:
+        updated = move_npc(state, npc_id=req.npc_id, destination=req.destination)
+    except KeyError:
+        return JSONResponse({"detail": "NPC 不存在或不允许由空间工具移动。"}, status_code=404)
     return JSONResponse(_spatial_state_payload(write_spatial_state(updated)))
 
 
