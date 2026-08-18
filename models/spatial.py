@@ -48,6 +48,7 @@ class SpatialState(BaseModel):
     active_followers: list[str] = Field(default_factory=list)
     npc_locations: dict[str, MapId] = Field(default_factory=dict)
     npc_overrides: dict[str, MapId] = Field(default_factory=dict)
+    triggered_events: list[str] = Field(default_factory=list)
 
     @property
     def display(self) -> str:
@@ -55,6 +56,32 @@ class SpatialState(BaseModel):
 
 
 SPATIAL_NPC_IDS: tuple[str, ...] = ("linxi", "shenzhiyi")
+
+
+class SpatialEventDefinition(BaseModel):
+    event_id: str
+    map_id: MapId
+    start_minute: int = Field(ge=0, le=23 * 60 + 59)
+    label: str
+    prompt: str
+
+
+SPATIAL_EVENT_DEFINITIONS: tuple[SpatialEventDefinition, ...] = (
+    SpatialEventDefinition(
+        event_id="clubroom_evening_rehearsal",
+        map_id="clubroom",
+        start_minute=18 * 60,
+        label="晚间排练留下的痕迹",
+        prompt="活动室的排练灯还亮着，谱架上留着一页被反复修改的台词。",
+    ),
+    SpatialEventDefinition(
+        event_id="rooftop_after_rehearsal",
+        map_id="rooftop",
+        start_minute=20 * 60,
+        label="天台的风",
+        prompt="夜风把楼下的喧闹吹散，栏杆上压着一张没有署名的便签。",
+    ),
+)
 
 
 def scheduled_npc_map(npc_id: str, story_time: StoryTime) -> MapId:
@@ -80,6 +107,27 @@ def apply_npc_schedules(state: SpatialState) -> SpatialState:
             scheduled_npc_map(npc_id, state.story_time),
         )
     return state.model_copy(update={"npc_locations": locations})
+
+
+def available_spatial_events(state: SpatialState) -> list[SpatialEventDefinition]:
+    """返回当前时空满足条件且尚未触发的确定性事件。"""
+    triggered = set(state.triggered_events)
+    return [
+        event
+        for event in SPATIAL_EVENT_DEFINITIONS
+        if event.event_id not in triggered
+        and event.map_id == state.player.map_id
+        and state.story_time.minute_of_day >= event.start_minute
+    ]
+
+
+def trigger_spatial_event(state: SpatialState, event_id: str) -> SpatialState:
+    available = {event.event_id for event in available_spatial_events(state)}
+    if event_id not in available:
+        raise KeyError(event_id)
+    return state.model_copy(update={
+        "triggered_events": [*state.triggered_events, event_id],
+    })
 
 
 def advance_story_time(story_time: StoryTime, minutes: int) -> StoryTime:

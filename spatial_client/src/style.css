@@ -25,6 +25,7 @@ h1 { margin-bottom: 0; font-size: clamp(22px, 3vw, 34px); font-weight: 600; }
 .minimap-dots i { position: relative; z-index: 1; width: 10px; height: 10px; border: 2px solid #c8d8bf; border-radius: 50%; background: #17231f; }
 .minimap-dots i.active { background: #f0c67b; box-shadow: 0 0 0 4px #f0c67b33; }
 .narration-bar { position: absolute; z-index: 4; bottom: 74px; left: 50%; max-width: min(680px, calc(100% - 40px)); transform: translateX(-50%); padding: 9px 16px; border-radius: 999px; color: #f3e8cf; font-size: 13px; text-align: center; }
+.event-hint { position: absolute; z-index: 5; bottom: 112px; left: 50%; transform: translateX(-50%); border: 1px solid #f0c67b77; border-radius: 999px; background: #17231fe8; color: #f0c67b; padding: 8px 13px; cursor: pointer; }
 .interaction-hint { position: absolute; z-index: 4; bottom: 22px; left: 50%; transform: translateX(-50%); padding: 8px 14px; border-radius: 999px; color: #fff6de; font-size: 12px; }
 .dialogue-panel { position: absolute; z-index: 8; right: 26px; bottom: 24px; width: min(560px, calc(100% - 52px)); padding: 20px 24px; border-radius: 16px; }
 .dialogue-panel h2 { margin-bottom: 8px; font-size: 22px; }

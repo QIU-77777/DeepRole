@@ -61,7 +61,7 @@ from repository.history import (
 from repository.message_router import message_router
 from repository.spatial_state import read_spatial_state, reset_spatial_state, update_player_snapshot, write_spatial_state
 from repository.relationship_state import read_relationship_state, rebuild_relationship_state, reset_relationship_state
-from models.spatial import MapId, SpatialState, advance_story_time, apply_npc_schedules, end_story_day, move_npc, transition_spatial_state
+from models.spatial import MapId, SpatialState, advance_story_time, apply_npc_schedules, available_spatial_events, end_story_day, move_npc, trigger_spatial_event, transition_spatial_state
 
 
 def reset_entities() -> None:
@@ -454,6 +454,7 @@ async def spatial_asset(asset_path: str):
 def _spatial_state_payload(state: SpatialState) -> dict:
     payload = state.model_dump()
     payload["story_time"]["display"] = state.story_time.display
+    payload["available_events"] = [event.model_dump() for event in available_spatial_events(state)]
     return payload
 
 
@@ -479,6 +480,10 @@ class SpatialNpcMoveRequest(BaseModel):
     npc_id: str
     destination: MapId
     reason: str = ""
+
+
+class SpatialEventTriggerRequest(BaseModel):
+    event_id: str
 
 
 @app.get("/api/spatial/state")
@@ -525,6 +530,16 @@ async def api_spatial_end_day() -> JSONResponse:
     if state.player.map_id != "campus_center":
         return JSONResponse({"detail": "必须从校园中心返回宿舍。"}, status_code=409)
     return JSONResponse(_spatial_state_payload(write_spatial_state(end_story_day(state))))
+
+
+@app.post("/api/spatial/event/trigger")
+async def api_spatial_event_trigger(req: SpatialEventTriggerRequest) -> JSONResponse:
+    state = read_spatial_state()
+    try:
+        updated = trigger_spatial_event(state, req.event_id)
+    except KeyError:
+        return JSONResponse({"detail": "事件尚未满足触发条件或已触发。"}, status_code=409)
+    return JSONResponse(_spatial_state_payload(write_spatial_state(updated)))
 
 
 @app.get("/api/relationships")

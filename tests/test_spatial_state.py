@@ -1,6 +1,6 @@
 import pytest
 
-from models.spatial import StoryTime, SpatialState, advance_story_time, apply_npc_schedules, end_story_day, move_npc, transition_spatial_state
+from models.spatial import StoryTime, SpatialState, advance_story_time, apply_npc_schedules, available_spatial_events, end_story_day, move_npc, transition_spatial_state, trigger_spatial_event
 import repository.spatial_state as spatial_state
 
 
@@ -66,3 +66,17 @@ def test_npc_schedule_projects_offscreen_locations_from_story_time() -> None:
     projected = apply_npc_schedules(evening)
 
     assert projected.npc_locations == {"linxi": "campus_center", "shenzhiyi": "rooftop"}
+
+
+def test_spatial_event_rules_are_deterministic_and_one_shot() -> None:
+    state = SpatialState(
+        story_time=StoryTime(minute_of_day=18 * 60 + 30),
+        player={"map_id": "clubroom", "x": 0, "y": 0, "spawn_id": "clubroom_door"},
+    )
+    events = available_spatial_events(state)
+    assert [event.event_id for event in events] == ["clubroom_evening_rehearsal"]
+
+    triggered = trigger_spatial_event(state, events[0].event_id)
+    assert available_spatial_events(triggered) == []
+    with pytest.raises(KeyError):
+        trigger_spatial_event(triggered, events[0].event_id)

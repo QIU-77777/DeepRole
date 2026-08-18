@@ -23,6 +23,7 @@ const relationshipData = ref<Record<string, { stage: string; tags: string[]; des
 const saveBusy = ref(false);
 const saveNotice = ref("");
 const saves = ref<Array<{ filename: string; title?: string; created_at?: string }>>([]);
+const availableEvent = ref<{ event_id: string; label: string; prompt: string } | null>(null);
 let npcLocations: Record<string, MapId> = {};
 let dialogueController: AbortController | null = null;
 let game: Phaser.Game | null = null;
@@ -66,11 +67,25 @@ async function transition(request: { fromMap: MapId; exitId: string }) {
     if (!response.ok) return null;
     const state = await response.json();
     gameTime.value = state.story_time.display;
+    availableEvent.value = state.available_events?.[0] ?? null;
     return { mapId: state.player.map_id as MapId, x: state.player.x, y: state.player.y };
   } catch {
     message.value = "出口服务暂不可用，使用本地灰盒切换。";
     return null;
   }
+}
+
+async function triggerEvent() {
+  const event = availableEvent.value;
+  if (!event) return;
+  const response = await fetch("/api/spatial/event/trigger", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ event_id: event.event_id }),
+  });
+  if (!response.ok) return;
+  message.value = event.prompt;
+  availableEvent.value = null;
 }
 
 function interact() {
@@ -231,6 +246,7 @@ async function sendDialogue(content = dialogueInput.value, recordPlayer = true) 
           choices?: string[];
           story_time?: { display?: string };
           npc_locations?: Record<string, MapId>;
+          available_events?: Array<{ event_id: string; label: string; prompt: string }>;
         };
         const event = data.type;
         if (!event) continue;
@@ -243,6 +259,7 @@ async function sendDialogue(content = dialogueInput.value, recordPlayer = true) 
         if (event === "done") receivedDone = true;
         if (event === "spatial_state") {
           if (data.story_time?.display) gameTime.value = data.story_time.display;
+          availableEvent.value = data.available_events?.[0] ?? availableEvent.value;
           if (data.npc_locations) {
             const scene = game?.scene.getScene("spatial-scene") as { updateNpcLocations?: (locations: Record<string, MapId>) => void } | undefined;
             scene?.updateNpcLocations?.(data.npc_locations);
@@ -285,6 +302,7 @@ onMounted(async () => {
       const state = await response.json();
       gameTime.value = state.story_time.display;
       npcLocations = state.npc_locations ?? {};
+      availableEvent.value = state.available_events?.[0] ?? null;
     }
   } catch {
     message.value = "空间状态服务未连接，使用本地灰盒初始状态。";
@@ -342,6 +360,7 @@ function onKeyDown(event: KeyboardEvent) {
       </div>
     </aside>
     <div class="narration-bar">{{ message }}</div>
+    <button v-if="availableEvent" class="event-hint" type="button" @click="triggerEvent">发现：{{ availableEvent.label }}</button>
     <div class="interaction-hint">{{ interactionHint }}</div>
     <section v-if="panelOpen" class="dialogue-panel" aria-live="polite">
       <button class="close-button" type="button" @click="closeDialogue">{{ dialogueBusy ? "停止" : "×" }}</button>
