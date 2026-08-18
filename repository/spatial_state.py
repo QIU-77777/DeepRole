@@ -26,7 +26,12 @@ def read_spatial_state() -> SpatialState:
     except (FileNotFoundError, json.JSONDecodeError, OSError):
         return default_spatial_state()
     try:
-        return SpatialState.model_validate(payload)
+        restored = SpatialState.model_validate(payload)
+        # Older runtime files predate semantic waypoints and may also carry
+        # locations from a previous story-time projection. Re-apply the
+        # deterministic projection on read so the client always receives a
+        # complete, time-consistent state without requiring a manual reset.
+        return apply_story_environment(apply_npc_schedules(restored))
     except (TypeError, ValueError):
         return default_spatial_state()
 

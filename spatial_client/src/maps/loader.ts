@@ -115,3 +115,17 @@ export function normalizeMapData(source: unknown): MapCollection {
     } as Record<MapId, MapDefinition>,
   };
 }
+
+/** Combine separately exported Tiled maps while keeping one shared tile size. */
+export function mergeMapData(sources: unknown[]): MapCollection {
+  const collections = sources.map(normalizeMapData);
+  const tileSize = collections[0]?.tileSize;
+  if (!tileSize) throw new Error("至少需要一张地图");
+  if (collections.some((collection) => collection.tileSize !== tileSize)) {
+    throw new Error("Tiled 地图必须使用相同 tile 尺寸");
+  }
+  return {
+    tileSize,
+    maps: Object.assign({}, ...collections.map((collection) => collection.maps)),
+  };
+}

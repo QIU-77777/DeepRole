@@ -25,6 +25,22 @@ def test_spatial_state_round_trip_uses_local_json(tmp_path, monkeypatch) -> None
     assert restored.player.map_id == "campus_center"
 
 
+def test_read_migrates_legacy_state_with_schedule_projection(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(spatial_state, "STATE_PATH", tmp_path / "spatial_state.json")
+    monkeypatch.setattr(spatial_state, "CHARACTERS_DIR", tmp_path)
+    (tmp_path / "spatial_state.json").write_text(
+        '{"story_time":{"season":"秋季","week":1,"weekday":"周三","minute_of_day":1110},'
+        '"player":{"map_id":"campus_center","x":176,"y":336,"spawn_id":"campus_center_start"},'
+        '"npc_locations":{"linxi":"clubroom","shenzhiyi":"clubroom"}}',
+        encoding="utf-8",
+    )
+
+    restored = spatial_state.read_spatial_state()
+
+    assert restored.npc_waypoints == {"linxi": "rehearsal_table", "shenzhiyi": "window"}
+    assert restored.weather == "小雨"
+
+
 def test_transition_validates_exit_and_advances_story_time() -> None:
     state = spatial_state.default_spatial_state()
     updated = transition_spatial_state(state, from_map="campus_center", exit_id="to_arts_hallway")

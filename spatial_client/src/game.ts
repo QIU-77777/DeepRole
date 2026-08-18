@@ -1,6 +1,10 @@
 import Phaser from "phaser";
-import mapData from "./maps/graybox.json";
-import { normalizeMapData, type MapDefinition, type MapExit, type MapNpc, type MapId as LoaderMapId } from "./maps/loader";
+import campusCenterMap from "./maps/tiled/campus_center.json";
+import artsHallwayMap from "./maps/tiled/arts_hallway.json";
+import clubroomMap from "./maps/tiled/clubroom.json";
+import rooftopMap from "./maps/tiled/rooftop.json";
+import { mergeMapData, type MapDefinition, type MapExit, type MapNpc, type MapId as LoaderMapId } from "./maps/loader";
+import { findGridPath, type GridPoint } from "./maps/grid_path";
 
 export type MapId = LoaderMapId;
 
@@ -26,7 +30,8 @@ type Hooks = {
 };
 
 type PhysicsRectangle = Phaser.GameObjects.Rectangle & { body: Phaser.Physics.Arcade.Body };
-const maps = normalizeMapData(mapData).maps;
+const mapData = mergeMapData([campusCenterMap, artsHallwayMap, clubroomMap, rooftopMap]);
+const maps = mapData.maps;
 
 const PLAYER_SPEED = 150;
 const INTERACTION_DISTANCE = 62;
@@ -39,13 +44,14 @@ class SpatialScene extends Phaser.Scene {
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private keys!: Record<string, Phaser.Input.Keyboard.Key>;
   private hooks!: Hooks;
-  private npcs: Array<{ data: MapNpc; body: Phaser.GameObjects.Rectangle }> = [];
+  private npcs: Array<{ data: MapNpc; body: Phaser.GameObjects.Rectangle; label: Phaser.GameObjects.Text }> = [];
   private exits: Array<{ data: MapExit; zone: Phaser.GameObjects.Zone }> = [];
   private lastPublished = "";
   private nameLabels: Phaser.GameObjects.Text[] = [];
   private transitioning = false;
   private npcLocations: Record<string, MapId> = {};
   private npcWaypoints: Record<string, string> = {};
+  private pendingNpcPaths: Record<string, GridPoint[]> = {};
   private facing: FacingDirection = "south";
   private animationClock = 0;
 
@@ -64,6 +70,7 @@ class SpatialScene extends Phaser.Scene {
 
   update() {
     if (!this.player || !this.cursors) return;
+    for (const npc of this.npcs) npc.label.setPosition(npc.body.x, npc.body.y - 28);
     if (this.hooks.isInputLocked?.()) {
       this.player.body.setVelocity(0, 0);
       this.player.setScale(1, 1);
@@ -124,6 +131,18 @@ class SpatialScene extends Phaser.Scene {
   }
 
   public updateNpcLocations(locations: Record<string, MapId>, waypoints: Record<string, string> = this.npcWaypoints) {
+    const definition = maps[this.mapId];
+    for (const npc of this.npcs) {
+      if (locations[npc.data.id] !== this.mapId) continue;
+      const waypoint = waypoints[npc.data.id] ?? npc.data.waypoint;
+      const target = waypoint ? definition.waypoints[waypoint] : undefined;
+      if (!target) continue;
+      const start = {
+        x: npc.body.x / mapData.tileSize - 0.5,
+        y: npc.body.y / mapData.tileSize - 0.5,
+      };
+      this.pendingNpcPaths[npc.data.id] = findGridPath(definition, start, target);
+    }
     this.npcLocations = locations;
     this.npcWaypoints = waypoints;
     this.loadMap(this.mapId, {
@@ -161,6 +180,7 @@ class SpatialScene extends Phaser.Scene {
       const location = this.npcLocations[npc.id];
       if (!location || location === mapId) this.addNpc(npc);
     }
+    this.pendingNpcPaths = {};
     for (const exit of definition.exits) this.addExit(exit);
     this.publishState(true);
   }
@@ -179,11 +199,28 @@ class SpatialScene extends Phaser.Scene {
     const anchor = waypoint ? maps[this.mapId].waypoints[waypoint] : undefined;
     const x = anchor?.x ?? npc.x;
     const y = anchor?.y ?? npc.y;
-    const body = this.add.rectangle((x + 0.5) * mapData.tileSize, (y + 0.5) * mapData.tileSize, 24, 30, Number(npc.color.replace("#", "0x")));
+    const path = this.pendingNpcPaths[npc.id];
+    delete this.pendingNpcPaths[npc.id];
+    const first = path?.[0] ?? { x, y };
+    const body = this.add.rectangle((first.x + 0.5) * mapData.tileSize, (first.y + 0.5) * mapData.tileSize, 24, 30, Number(npc.color.replace("#", "0x")));
     body.setDepth(9);
     const label = this.add.text(body.x, body.y - 28, npc.label, { color: "#fff8e5", fontFamily: "sans-serif", fontSize: "13px", backgroundColor: "#17231fcc", padding: { x: 4, y: 2 } }).setOrigin(0.5, 1).setDepth(20);
-    this.npcs.push({ data: npc, body });
+    this.npcs.push({ data: npc, body, label });
     this.nameLabels.push(label);
+    if (path && path.length > 1) this.animateNpcPath(body, path, 1);
+  }
+
+  private animateNpcPath(body: Phaser.GameObjects.Rectangle, path: GridPoint[], index: number): void {
+    const point = path[index];
+    if (!point) return;
+    this.tweens.add({
+      targets: body,
+      x: (point.x + 0.5) * mapData.tileSize,
+      y: (point.y + 0.5) * mapData.tileSize,
+      duration: 110,
+      ease: "Linear",
+      onComplete: () => this.animateNpcPath(body, path, index + 1),
+    });
   }
 
   private addExit(exit: MapExit) {
