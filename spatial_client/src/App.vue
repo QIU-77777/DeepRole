@@ -6,6 +6,8 @@ import type Phaser from "phaser";
 const gameHost = ref<HTMLElement | null>(null);
 const gameState = ref<SpatialGameState>({ mapId: "campus_center", player: { x: 0, y: 0 }, nearbyNpc: null, nearbyExit: null });
 const gameTime = ref("秋季 · 第 1 周 · 周三 18:30");
+const gameWeather = ref("多云");
+const gamePhase = ref("傍晚");
 const message = ref("在校园中心自由探索。靠近人物或出口后按 E。 ");
 const panelOpen = ref(false);
 const gameReady = ref(false);
@@ -67,6 +69,8 @@ async function transition(request: { fromMap: MapId; exitId: string }) {
     if (!response.ok) return null;
     const state = await response.json();
     gameTime.value = state.story_time.display;
+    gameWeather.value = state.weather ?? gameWeather.value;
+    gamePhase.value = state.day_phase ?? gamePhase.value;
     availableEvent.value = state.available_events?.[0] ?? null;
     return { mapId: state.player.map_id as MapId, x: state.player.x, y: state.player.y };
   } catch {
@@ -111,6 +115,8 @@ async function endDay() {
     if (!response.ok) throw new Error("end day failed");
     const state = await response.json();
     gameTime.value = state.story_time.display;
+    gameWeather.value = state.weather ?? gameWeather.value;
+    gamePhase.value = state.day_phase ?? gamePhase.value;
     const scene = game?.scene.getScene("spatial-scene") as { switchMap?: (mapId: MapId, spawn: { x: number; y: number }) => void } | undefined;
     scene?.switchMap?.("campus_center", {
       x: state.player.x / 32 - 0.5,
@@ -245,6 +251,8 @@ async function sendDialogue(content = dialogueInput.value, recordPlayer = true) 
           content?: string;
           choices?: string[];
           story_time?: { display?: string };
+          weather?: string;
+          day_phase?: string;
           npc_locations?: Record<string, MapId>;
           available_events?: Array<{ event_id: string; label: string; prompt: string }>;
         };
@@ -259,6 +267,8 @@ async function sendDialogue(content = dialogueInput.value, recordPlayer = true) 
         if (event === "done") receivedDone = true;
         if (event === "spatial_state") {
           if (data.story_time?.display) gameTime.value = data.story_time.display;
+          if (data.weather) gameWeather.value = data.weather;
+          if (data.day_phase) gamePhase.value = data.day_phase;
           availableEvent.value = data.available_events?.[0] ?? availableEvent.value;
           if (data.npc_locations) {
             const scene = game?.scene.getScene("spatial-scene") as { updateNpcLocations?: (locations: Record<string, MapId>) => void } | undefined;
@@ -301,6 +311,8 @@ onMounted(async () => {
     if (response.ok) {
       const state = await response.json();
       gameTime.value = state.story_time.display;
+      gameWeather.value = state.weather ?? gameWeather.value;
+      gamePhase.value = state.day_phase ?? gamePhase.value;
       npcLocations = state.npc_locations ?? {};
       availableEvent.value = state.available_events?.[0] ?? null;
     }
@@ -341,7 +353,7 @@ function onKeyDown(event: KeyboardEvent) {
       </div>
       <div class="time-card">
         <span>{{ gameTime }}</span>
-        <small>叙事时间 · 秋季</small>
+        <small>叙事时间 · {{ gamePhase }} · {{ gameWeather }}</small>
         <button class="profile-button" type="button" @click="openProfile()">人物档案</button>
         <div class="save-controls">
           <button type="button" :disabled="saveBusy" @click="saveWorldline">保存世界线</button>

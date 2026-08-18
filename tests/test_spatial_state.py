@@ -1,6 +1,6 @@
 import pytest
 
-from models.spatial import StoryTime, SpatialState, advance_story_time, apply_npc_schedules, available_spatial_events, end_story_day, move_npc, transition_spatial_state, trigger_spatial_event
+from models.spatial import StoryTime, SpatialState, advance_story_time, apply_npc_schedules, apply_story_environment, available_spatial_events, end_story_day, move_npc, transition_spatial_state, trigger_spatial_event
 import repository.spatial_state as spatial_state
 
 
@@ -80,3 +80,11 @@ def test_spatial_event_rules_are_deterministic_and_one_shot() -> None:
     assert available_spatial_events(triggered) == []
     with pytest.raises(KeyError):
         trigger_spatial_event(triggered, events[0].event_id)
+
+
+def test_weather_and_day_phase_come_from_story_time() -> None:
+    state = SpatialState(story_time=StoryTime(week=1, weekday="周四", minute_of_day=23 * 60))
+    projected = apply_story_environment(state)
+
+    assert projected.weather == "晴朗"
+    assert projected.day_phase == "夜间"

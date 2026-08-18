@@ -6,18 +6,18 @@ import json
 import os
 from pathlib import Path
 
-from models.spatial import SpatialPlayerState, SpatialState, StoryTime, apply_npc_schedules
+from models.spatial import SpatialPlayerState, SpatialState, apply_npc_schedules, apply_story_environment, StoryTime
 from repository.config import CHARACTERS_DIR
 
 STATE_PATH = CHARACTERS_DIR / "spatial_state.json"
 
 
 def default_spatial_state() -> SpatialState:
-    return apply_npc_schedules(SpatialState(
+    return apply_story_environment(apply_npc_schedules(SpatialState(
         story_time=StoryTime(),
         player=SpatialPlayerState(),
         npc_locations={"linxi": "clubroom", "shenzhiyi": "clubroom"},
-    ))
+    )))
 
 
 def read_spatial_state() -> SpatialState:

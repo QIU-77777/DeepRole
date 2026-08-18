@@ -61,7 +61,7 @@ from repository.history import (
 from repository.message_router import message_router
 from repository.spatial_state import read_spatial_state, reset_spatial_state, update_player_snapshot, write_spatial_state
 from repository.relationship_state import read_relationship_state, rebuild_relationship_state, reset_relationship_state
-from models.spatial import MapId, SpatialState, advance_story_time, apply_npc_schedules, available_spatial_events, end_story_day, move_npc, trigger_spatial_event, transition_spatial_state
+from models.spatial import MapId, SpatialState, advance_story_time, apply_npc_schedules, apply_story_environment, available_spatial_events, end_story_day, move_npc, trigger_spatial_event, transition_spatial_state
 
 
 def reset_entities() -> None:
@@ -454,6 +454,7 @@ async def spatial_asset(asset_path: str):
 def _spatial_state_payload(state: SpatialState) -> dict:
     payload = state.model_dump()
     payload["story_time"]["display"] = state.story_time.display
+    payload["day_phase"] = state.day_phase
     payload["available_events"] = [event.model_dump() for event in available_spatial_events(state)]
     return payload
 
@@ -895,7 +896,7 @@ async def _chat_stream(
         spatial_state = spatial_state.model_copy(update={
             "story_time": advance_story_time(spatial_state.story_time, 5),
         })
-        spatial_state = write_spatial_state(apply_npc_schedules(spatial_state))
+        spatial_state = write_spatial_state(apply_story_environment(apply_npc_schedules(spatial_state)))
         yield _sse_event("spatial_state", _spatial_state_payload(spatial_state))
 
     choices_task: asyncio.Task[list[str]] | None = None

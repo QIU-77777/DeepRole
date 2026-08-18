@@ -44,6 +44,7 @@ class SpatialPlayerState(BaseModel):
 class SpatialState(BaseModel):
     schema_version: int = 1
     story_time: StoryTime = Field(default_factory=StoryTime)
+    weather: str = "多云"
     player: SpatialPlayerState = Field(default_factory=SpatialPlayerState)
     active_followers: list[str] = Field(default_factory=list)
     npc_locations: dict[str, MapId] = Field(default_factory=dict)
@@ -53,6 +54,17 @@ class SpatialState(BaseModel):
     @property
     def display(self) -> str:
         return self.story_time.display
+
+    @property
+    def day_phase(self) -> str:
+        minute = self.story_time.minute_of_day
+        if minute < 6 * 60:
+            return "夜间"
+        if minute < 18 * 60:
+            return "白天"
+        if minute < 22 * 60:
+            return "傍晚"
+        return "夜间"
 
 
 SPATIAL_NPC_IDS: tuple[str, ...] = ("linxi", "shenzhiyi")
@@ -107,6 +119,16 @@ def apply_npc_schedules(state: SpatialState) -> SpatialState:
             scheduled_npc_map(npc_id, state.story_time),
         )
     return state.model_copy(update={"npc_locations": locations})
+
+
+def weather_for_story_time(story_time: StoryTime) -> str:
+    """首版天气表：仅由故事日期决定，不读取宿主机天气或现实时间。"""
+    day_index = (story_time.week - 1) * 7 + WEEKDAYS.index(story_time.weekday)
+    return ("多云", "晴朗", "小雨", "晴朗")[day_index % 4]
+
+
+def apply_story_environment(state: SpatialState) -> SpatialState:
+    return state.model_copy(update={"weather": weather_for_story_time(state.story_time)})
 
 
 def available_spatial_events(state: SpatialState) -> list[SpatialEventDefinition]:
@@ -169,7 +191,7 @@ def transition_spatial_state(state: SpatialState, *, from_map: MapId, exit_id: s
             "y": float(transition["y"]),
         }),
     })
-    return apply_npc_schedules(updated)
+    return apply_story_environment(apply_npc_schedules(updated))
 
 
 def move_npc(state: SpatialState, *, npc_id: str, destination: MapId) -> SpatialState:
@@ -199,4 +221,4 @@ def end_story_day(state: SpatialState) -> SpatialState:
         }),
         "npc_overrides": {},
     })
-    return apply_npc_schedules(updated)
+    return apply_story_environment(apply_npc_schedules(updated))
