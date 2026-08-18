@@ -7,8 +7,8 @@ function overlaps(a: { x: number; y: number; w: number; h: number }, b: { x: num
 }
 
 function isBlocked(definition: MapDefinition, point: GridPoint, start: GridPoint, goal: GridPoint): boolean {
-  if ((point.x === start.x && point.y === start.y) || (point.x === goal.x && point.y === goal.y)) return false;
   if (point.x < 0 || point.y < 0 || point.x >= definition.width || point.y >= definition.height) return true;
+  if ((point.x === start.x && point.y === start.y) || (point.x === goal.x && point.y === goal.y)) return false;
   return definition.walls.some((wall) => overlaps({ x: point.x, y: point.y, w: 1, h: 1 }, wall));
 }
 
