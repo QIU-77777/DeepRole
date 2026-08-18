@@ -1,6 +1,6 @@
 import pytest
 
-from models.spatial import StoryTime, SpatialState, advance_story_time, move_npc, transition_spatial_state
+from models.spatial import StoryTime, SpatialState, advance_story_time, apply_npc_schedules, end_story_day, move_npc, transition_spatial_state
 import repository.spatial_state as spatial_state
 
 
@@ -47,3 +47,22 @@ def test_npc_move_uses_semantic_destination_only() -> None:
 def test_npc_move_rejects_unknown_npc() -> None:
     with pytest.raises(KeyError):
         move_npc(SpatialState(), npc_id="unknown", destination="rooftop")
+
+
+def test_end_story_day_rolls_to_next_morning() -> None:
+    state = SpatialState(
+        story_time=StoryTime(week=1, weekday="周三", minute_of_day=18 * 60 + 30),
+    )
+    updated = end_story_day(state)
+
+    assert updated.story_time.week == 1
+    assert updated.story_time.weekday == "周四"
+    assert updated.story_time.minute_of_day == 8 * 60
+    assert updated.player.map_id == "campus_center"
+
+
+def test_npc_schedule_projects_offscreen_locations_from_story_time() -> None:
+    evening = SpatialState(story_time=StoryTime(minute_of_day=21 * 60))
+    projected = apply_npc_schedules(evening)
+
+    assert projected.npc_locations == {"linxi": "campus_center", "shenzhiyi": "rooftop"}

@@ -77,6 +77,14 @@ class SpatialScene extends Phaser.Scene {
     this.loadMap(mapId, spawn);
   }
 
+  public updateNpcLocations(locations: Record<string, MapId>) {
+    this.npcLocations = locations;
+    this.loadMap(this.mapId, {
+      x: this.player.x / mapData.tileSize - 0.5,
+      y: this.player.y / mapData.tileSize - 0.5,
+    });
+  }
+
   private loadMap(mapId: MapId, spawn?: { x: number; y: number }) {
     this.mapId = mapId;
     this.children.removeAll(true);

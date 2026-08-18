@@ -58,7 +58,8 @@ from repository.history import (
 )
 from repository.message_router import message_router
 from repository.spatial_state import read_spatial_state, reset_spatial_state, update_player_snapshot, write_spatial_state
-from models.spatial import MapId, SpatialState, move_npc, transition_spatial_state
+from repository.relationship_state import read_relationship_state, rebuild_relationship_state, reset_relationship_state
+from models.spatial import MapId, SpatialState, advance_story_time, apply_npc_schedules, end_story_day, move_npc, transition_spatial_state
 
 
 def reset_entities() -> None:
@@ -515,6 +516,23 @@ async def api_spatial_npc_move(req: SpatialNpcMoveRequest) -> JSONResponse:
     return JSONResponse(_spatial_state_payload(write_spatial_state(updated)))
 
 
+@app.post("/api/spatial/end-day")
+async def api_spatial_end_day() -> JSONResponse:
+    """通过返回宿舍出口结束叙事日，不读取宿主机时间。"""
+    state = read_spatial_state()
+    if state.player.map_id != "campus_center":
+        return JSONResponse({"detail": "必须从校园中心返回宿舍。"}, status_code=409)
+    return JSONResponse(_spatial_state_payload(write_spatial_state(end_story_day(state))))
+
+
+@app.get("/api/relationships")
+async def api_relationships() -> JSONResponse:
+    state = read_relationship_state()
+    if not state.characters:
+        state = rebuild_relationship_state(get_agent_names(include_narrator=False))
+    return JSONResponse(state.model_dump())
+
+
 # =============================================================================
 # /api/init
 # =============================================================================
@@ -649,6 +667,7 @@ async def api_new_game(req: NewGameRequest) -> JSONResponse:
     await _settle_pending_state_update(cancel=True)
     intro_text, opening_text = await reset_game(req.story_id)
     reset_spatial_state()
+    rebuild_relationship_state(get_agent_names(include_narrator=False))
     reset_entities()
     for name in get_agent_names(include_narrator=True):
         reload_conversation_agent(name)
@@ -837,6 +856,14 @@ async def _chat_stream(
                 "agent",
                 {"content": f"（{_get_agent_display_name(agent_name)}暂时无法回应，请稍后再试）", "author": _get_agent_display_name(agent_name)},
             )
+
+    if is_spatial and agent_responses:
+        spatial_state = read_spatial_state()
+        spatial_state = spatial_state.model_copy(update={
+            "story_time": advance_story_time(spatial_state.story_time, 5),
+        })
+        spatial_state = write_spatial_state(apply_npc_schedules(spatial_state))
+        yield _sse_event("spatial_state", _spatial_state_payload(spatial_state))
 
     choices_task: asyncio.Task[list[str]] | None = None
     if agent_responses and choices_token == _choices_generation_token:
@@ -1065,6 +1092,7 @@ async def api_reset(req: ResetRequest) -> JSONResponse:
     await _settle_pending_state_update(cancel=True)
     intro_text, opening_text = await reset_game(req.story_id)
     reset_spatial_state()
+    rebuild_relationship_state(get_agent_names(include_narrator=False))
     reset_entities()
     for name in get_agent_names(include_narrator=True):
         reload_conversation_agent(name)

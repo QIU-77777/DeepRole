@@ -47,6 +47,7 @@ class SpatialState(BaseModel):
     player: SpatialPlayerState = Field(default_factory=SpatialPlayerState)
     active_followers: list[str] = Field(default_factory=list)
     npc_locations: dict[str, MapId] = Field(default_factory=dict)
+    npc_overrides: dict[str, MapId] = Field(default_factory=dict)
 
     @property
     def display(self) -> str:
@@ -54,6 +55,31 @@ class SpatialState(BaseModel):
 
 
 SPATIAL_NPC_IDS: tuple[str, ...] = ("linxi", "shenzhiyi")
+
+
+def scheduled_npc_map(npc_id: str, story_time: StoryTime) -> MapId:
+    """首版可维护的基础日程：只决定语义地图，不生成逐帧移动。"""
+    minute = story_time.minute_of_day
+    if npc_id == "linxi":
+        return "clubroom" if 17 * 60 <= minute < 21 * 60 else "campus_center"
+    if npc_id == "shenzhiyi":
+        if 17 * 60 <= minute < 20 * 60:
+            return "clubroom"
+        if 20 * 60 <= minute < 22 * 60:
+            return "rooftop"
+        return "arts_hallway"
+    raise KeyError(npc_id)
+
+
+def apply_npc_schedules(state: SpatialState) -> SpatialState:
+    """按故事时间投影主要 NPC 的离屏位置。"""
+    locations = dict(state.npc_locations)
+    for npc_id in SPATIAL_NPC_IDS:
+        locations[npc_id] = state.npc_overrides.get(
+            npc_id,
+            scheduled_npc_map(npc_id, state.story_time),
+        )
+    return state.model_copy(update={"npc_locations": locations})
 
 
 def advance_story_time(story_time: StoryTime, minutes: int) -> StoryTime:
@@ -86,7 +112,7 @@ def transition_spatial_state(state: SpatialState, *, from_map: MapId, exit_id: s
     transition = SPATIAL_TRANSITIONS.get((from_map, exit_id))
     if transition is None:
         raise KeyError(exit_id)
-    return state.model_copy(update={
+    updated = state.model_copy(update={
         "story_time": advance_story_time(state.story_time, int(transition["minutes"])),
         "player": state.player.model_copy(update={
             "map_id": str(transition["target"]),
@@ -95,6 +121,7 @@ def transition_spatial_state(state: SpatialState, *, from_map: MapId, exit_id: s
             "y": float(transition["y"]),
         }),
     })
+    return apply_npc_schedules(updated)
 
 
 def move_npc(state: SpatialState, *, npc_id: str, destination: MapId) -> SpatialState:
@@ -103,4 +130,25 @@ def move_npc(state: SpatialState, *, npc_id: str, destination: MapId) -> Spatial
         raise KeyError(npc_id)
     locations = dict(state.npc_locations)
     locations[npc_id] = destination
-    return state.model_copy(update={"npc_locations": locations})
+    overrides = dict(state.npc_overrides)
+    overrides[npc_id] = destination
+    return state.model_copy(update={"npc_locations": locations, "npc_overrides": overrides})
+
+
+def end_story_day(state: SpatialState) -> SpatialState:
+    """结束当前叙事日并回到第二天早晨的校园入口。"""
+    next_time = advance_story_time(
+        state.story_time,
+        (24 * 60 - state.story_time.minute_of_day) + 8 * 60,
+    )
+    updated = state.model_copy(update={
+        "story_time": next_time,
+        "player": state.player.model_copy(update={
+            "map_id": "campus_center",
+            "spawn_id": "campus_center_start",
+            "x": 176.0,
+            "y": 336.0,
+        }),
+        "npc_overrides": {},
+    })
+    return apply_npc_schedules(updated)

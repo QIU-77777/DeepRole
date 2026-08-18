@@ -6,6 +6,7 @@
 """
 
 from typing import Annotated
+from typing import Literal
 
 from pydantic import (
     AliasChoices,
@@ -27,12 +28,21 @@ ChoiceText = Annotated[str, Field(max_length=MAX_CHOICE_CHARS)]
 # ---------------------------------------------------------------------------
 
 
+class LLMToolCall(BaseModel):
+    """允许角色请求的语义工具；执行层会再次校验调用者和目的地。"""
+
+    name: Literal["move_npc"]
+    npc_id: str
+    destination: str
+
+
 class LLMCharacterOutput(BaseModel):
     content: str
     memory: str
     status: dict[str, str] = Field(default_factory=dict)
     triggered: list[str] = Field(default_factory=list)
     add_event: list[str] = Field(default_factory=list)
+    tool_calls: list[LLMToolCall] = Field(default_factory=list)
 
 
 class LLMNewCharacterRequest(BaseModel):

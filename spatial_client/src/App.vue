@@ -13,6 +13,7 @@ const dialogueInput = ref("");
 const dialogueBusy = ref(false);
 const dialogueChoices = ref<string[]>([]);
 const dialogueMessages = ref<Array<{ author: string; content: string; kind?: string }>>([]);
+const dialogueVisibility = ref<"public" | "private">("public");
 let npcLocations: Record<string, MapId> = {};
 let game: Phaser.Game | null = null;
 
@@ -68,10 +69,27 @@ function interact() {
     return;
   }
   if (gameState.value.nearbyExit?.endDay) {
-    message.value = "日结与叙事时间推进将在空间状态里程碑接入。";
+    void endDay();
     return;
   }
   if (gameState.value.nearbyExit) message.value = `前往${mapLabels[gameState.value.nearbyExit.target]}。`;
+}
+
+async function endDay() {
+  try {
+    const response = await fetch("/api/spatial/end-day", { method: "POST" });
+    if (!response.ok) throw new Error("end day failed");
+    const state = await response.json();
+    gameTime.value = state.story_time.display;
+    const scene = game?.scene.getScene("spatial-scene") as { switchMap?: (mapId: MapId, spawn: { x: number; y: number }) => void } | undefined;
+    scene?.switchMap?.("campus_center", {
+      x: state.player.x / 32 - 0.5,
+      y: state.player.y / 32 - 0.5,
+    });
+    message.value = "你回到宿舍休息。新的一天开始了。";
+  } catch {
+    message.value = "现在还不能结束今天。请从校园中心的宿舍出口离开。";
+  }
 }
 
 function appendDialogue(author: string, content: string, kind = "") {
@@ -95,7 +113,9 @@ async function sendDialogue(content = dialogueInput.value) {
         spatial: {
           map_id: gameState.value.mapId,
           primary_target: target.id,
-          visible_to: gameState.value.mapId === "clubroom" ? ["linxi", "shenzhiyi"] : [target.id],
+          visible_to: dialogueVisibility.value === "public" && gameState.value.mapId === "clubroom"
+            ? ["linxi", "shenzhiyi"]
+            : [target.id],
         },
       }),
     });
@@ -112,10 +132,23 @@ async function sendDialogue(content = dialogueInput.value) {
         const event = raw.match(/^event:\s*(.+)$/m)?.[1]?.trim();
         const dataText = raw.match(/^data:\s*(.+)$/m)?.[1];
         if (!event || !dataText) continue;
-        const data = JSON.parse(dataText) as { author?: string; content?: string; choices?: string[] };
+        const data = JSON.parse(dataText) as {
+          author?: string;
+          content?: string;
+          choices?: string[];
+          story_time?: { display?: string };
+          npc_locations?: Record<string, MapId>;
+        };
         if (event === "narrator") appendDialogue(data.author ?? "旁白", data.content ?? "", "narrator");
         if (event === "agent") appendDialogue(data.author ?? target.label, data.content ?? "", "agent");
         if (event === "choices") dialogueChoices.value = data.choices ?? [];
+        if (event === "spatial_state") {
+          if (data.story_time?.display) gameTime.value = data.story_time.display;
+          if (data.npc_locations) {
+            const scene = game?.scene.getScene("spatial-scene") as { updateNpcLocations?: (locations: Record<string, MapId>) => void } | undefined;
+            scene?.updateNpcLocations?.(data.npc_locations);
+          }
+        }
         if (event === "response_done") dialogueBusy.value = false;
       }
       if (done) break;
@@ -198,7 +231,13 @@ function onKeyDown(event: KeyboardEvent) {
         </p>
         <p v-if="dialogueBusy" class="dialogue-line narrator"><strong>旁白</strong><span>……</span></p>
       </div>
-      <div class="dialogue-mode">公开 · 当前场景中的主要角色可听见</div>
+      <label class="dialogue-mode">
+        <span>听众</span>
+        <select v-model="dialogueVisibility" :disabled="dialogueBusy">
+          <option value="public">公开 · 在场角色可听见</option>
+          <option value="private">私语 · 仅 {{ gameState.nearbyNpc?.label }} 听见</option>
+        </select>
+      </label>
       <div v-if="dialogueChoices.length" class="dialogue-choices">
         <button v-for="choice in dialogueChoices" :key="choice" type="button" :disabled="dialogueBusy" @click="sendDialogue(choice)">{{ choice }}</button>
       </div>
