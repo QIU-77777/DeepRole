@@ -10,6 +10,7 @@ import json
 import math
 import re
 import traceback
+import uuid
 from functools import lru_cache
 from pathlib import Path
 
@@ -745,6 +746,7 @@ async def _chat_stream(
     """核心游戏循环，通过 SSE 逐步推送结果。"""
     global _pending_choices_task
     choices_token = _invalidate_pending_choices(clear_saved=True)
+    interaction_id = uuid.uuid4().hex if spatial_context is not None else None
     # 0 = 哨兵：本轮还没有 narrator 成功发言，不触发 consolidation
     current_turn = 0
 
@@ -804,11 +806,13 @@ async def _chat_stream(
                 targets,
                 user_input,
                 visible_to=spatial_audience,
+                interaction_id=interaction_id,
             )
             current_turn = await message_router.broadcast_narrator_output(
                 targets,
                 narrator_dump,
                 visible_to=spatial_audience,
+                interaction_id=interaction_id,
             )
         else:
             await message_router.broadcast_player_message(targets, user_input)
@@ -841,6 +845,7 @@ async def _chat_stream(
                     targets,
                     user_input,
                     visible_to=spatial_audience,
+                    interaction_id=interaction_id,
                 )
             else:
                 response = await run_agent_in_scene(agent_name, targets, user_input)

@@ -19,7 +19,11 @@ const profileLoading = ref(false);
 const profileAgent = ref("linxi");
 const profileData = ref<{ selected_display_name?: string; nodes?: Array<{ id: string; label?: string; group?: string; meta?: { content?: string; content_preview?: string; raw_dialogue_preview?: string; type_label?: string } }>; stats?: { episode_count?: number; understanding_count?: number } } | null>(null);
 const relationshipData = ref<Record<string, { stage: string; tags: string[]; description: string }>>({});
+const saveBusy = ref(false);
+const saveNotice = ref("");
+const saves = ref<Array<{ filename: string; title?: string; created_at?: string }>>([]);
 let npcLocations: Record<string, MapId> = {};
+let dialogueController: AbortController | null = null;
 let game: Phaser.Game | null = null;
 
 const mapLabels: Record<MapId, string> = {
@@ -119,6 +123,52 @@ async function openProfile(agent = gameState.value.nearbyNpc?.id ?? profileAgent
   }
 }
 
+async function saveWorldline() {
+  if (saveBusy.value) return;
+  saveBusy.value = true;
+  saveNotice.value = "正在等待后台记忆整理……";
+  try {
+    const response = await fetch("/api/save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.detail || "save failed");
+    saveNotice.value = `世界线已保存：${payload.filename}`;
+    await refreshSaves();
+  } catch (error) {
+    saveNotice.value = error instanceof Error ? error.message : "保存失败。";
+  } finally {
+    saveBusy.value = false;
+  }
+}
+
+async function refreshSaves() {
+  const response = await fetch("/api/saves");
+  if (!response.ok) return;
+  const payload = await response.json();
+  saves.value = payload.saves ?? [];
+}
+
+async function loadWorldline(filename: string) {
+  if (!window.confirm("读取旧世界线？当前未手动保存的进度将无法回滚。")) return;
+  const response = await fetch("/api/load", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ filename }),
+  });
+  if (!response.ok) {
+    saveNotice.value = "读取失败，请稍后再试。";
+    return;
+  }
+  window.location.reload();
+}
+
+function closeSaves() {
+  saves.value = [];
+}
+
 function appendDialogue(author: string, content: string, kind = "") {
   if (content.trim()) dialogueMessages.value.push({ author, content: content.trim(), kind });
 }
@@ -130,11 +180,13 @@ async function sendDialogue(content = dialogueInput.value) {
   dialogueInput.value = "";
   dialogueBusy.value = true;
   dialogueChoices.value = [];
+  dialogueController = new AbortController();
   appendDialogue("我", text, "player");
   try {
     const response = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+      signal: dialogueController.signal,
       body: JSON.stringify({
         message: text,
         spatial: {
@@ -156,16 +208,18 @@ async function sendDialogue(content = dialogueInput.value) {
       const events = buffer.split("\n\n");
       buffer = events.pop() ?? "";
       for (const raw of events) {
-        const event = raw.match(/^event:\s*(.+)$/m)?.[1]?.trim();
         const dataText = raw.match(/^data:\s*(.+)$/m)?.[1];
-        if (!event || !dataText) continue;
+        if (!dataText) continue;
         const data = JSON.parse(dataText) as {
+          type?: string;
           author?: string;
           content?: string;
           choices?: string[];
           story_time?: { display?: string };
           npc_locations?: Record<string, MapId>;
         };
+        const event = data.type;
+        if (!event) continue;
         if (event === "narrator") {
           appendDialogue(data.author ?? "旁白", data.content ?? "", "narrator");
           message.value = data.content ?? message.value;
@@ -186,8 +240,24 @@ async function sendDialogue(content = dialogueInput.value) {
     dialogueBusy.value = false;
   } catch {
     dialogueBusy.value = false;
-    appendDialogue("系统", "对话服务暂不可用，请稍后再试。", "error");
+    if (dialogueController?.signal.aborted) {
+      appendDialogue("系统", "本轮对话已停止。", "error");
+    } else {
+      appendDialogue("系统", "对话服务暂不可用，请稍后再试。", "error");
+    }
+  } finally {
+    dialogueController = null;
   }
+}
+
+function cancelDialogue() {
+  dialogueController?.abort();
+  dialogueBusy.value = false;
+}
+
+function closeDialogue() {
+  if (dialogueBusy.value) cancelDialogue();
+  else panelOpen.value = false;
 }
 
 onMounted(async () => {
@@ -222,7 +292,7 @@ function onKeyDown(event: KeyboardEvent) {
   const target = event.target as HTMLElement | null;
   const typing = target?.tagName === "INPUT" || target?.tagName === "TEXTAREA";
   if (event.key.toLowerCase() === "e" && !panelOpen.value && !typing) interact();
-  if (event.key === "Escape" && !dialogueBusy.value) panelOpen.value = false;
+  if (event.key === "Escape") closeDialogue();
 }
 </script>
 
@@ -238,6 +308,10 @@ function onKeyDown(event: KeyboardEvent) {
         <span>{{ gameTime }}</span>
         <small>叙事时间 · 秋季</small>
         <button class="profile-button" type="button" @click="openProfile()">人物档案</button>
+        <div class="save-controls">
+          <button type="button" :disabled="saveBusy" @click="saveWorldline">保存世界线</button>
+          <button type="button" @click="refreshSaves">读取列表</button>
+        </div>
       </div>
     </header>
     <aside class="minimap" aria-label="小地图">
@@ -253,7 +327,7 @@ function onKeyDown(event: KeyboardEvent) {
     <div class="narration-bar">{{ message }}</div>
     <div class="interaction-hint">{{ interactionHint }}</div>
     <section v-if="panelOpen" class="dialogue-panel" aria-live="polite">
-      <button class="close-button" type="button" :disabled="dialogueBusy" @click="panelOpen = false">×</button>
+      <button class="close-button" type="button" @click="closeDialogue">{{ dialogueBusy ? "停止" : "×" }}</button>
       <p class="eyebrow">面对面交谈</p>
       <h2>{{ gameState.nearbyNpc?.label }}</h2>
       <div class="dialogue-log">
@@ -297,6 +371,14 @@ function onKeyDown(event: KeyboardEvent) {
           </article>
         </div>
       </template>
+    </aside>
+    <aside v-if="saves.length" class="save-panel" aria-live="polite">
+      <button class="close-button" type="button" @click="closeSaves">×</button>
+      <p class="eyebrow">手动世界线</p>
+      <p v-if="saveNotice" class="save-notice">{{ saveNotice }}</p>
+      <button v-for="save in saves" :key="save.filename" type="button" class="save-row" @click="loadWorldline(save.filename)">
+        <strong>{{ save.title || save.filename }}</strong><small>{{ save.created_at || save.filename }}</small>
+      </button>
     </aside>
   </main>
 </template>

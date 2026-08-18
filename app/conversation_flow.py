@@ -83,12 +83,14 @@ async def run_agent_in_scene(
     user_input: str,
     *,
     visible_to: list[str] | None = None,
+    interaction_id: str | None = None,
 ) -> str | None:
     """在场景上下文中运行单个角色并广播响应。"""
     from repository.message_router import message_router
 
     character = character_repo.load(agent_name)
     output = await conversation_service.run_turn(character, user_input)
+    tool_results = conversation_service.consume_tool_results()
     response = clean_response(output.content)
     if is_valid_response(response, agent_name):
         await message_router.broadcast_agent_response(
@@ -96,5 +98,13 @@ async def run_agent_in_scene(
             targets,
             response,
             visible_to=visible_to,
+            interaction_id=interaction_id,
+        )
+    for result in tool_results:
+        await message_router.broadcast_tool_result(
+            targets,
+            result,
+            visible_to=visible_to,
+            interaction_id=interaction_id,
         )
     return response

@@ -36,6 +36,8 @@ def extract_narrator_output(message: Mapping[str, Any]) -> dict[str, Any]:
 
 def raw_message_text(message: Mapping[str, Any]) -> str:
     """Return searchable/prompt text without converting narrator JSON to markdown."""
+    if message.get("role") == "tool" and message.get("tool_result"):
+        return json.dumps(message["tool_result"], ensure_ascii=False, separators=(",", ":"))
     payload = extract_narrator_output(message)
     if payload:
         return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
@@ -55,4 +57,6 @@ def role_to_speaker(role: str) -> str:
         return "玩家"
     if role == "narrator":
         return "旁白"
+    if role == "tool":
+        return "系统工具"
     return role

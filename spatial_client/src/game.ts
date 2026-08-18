@@ -20,14 +20,16 @@ type Hooks = {
 type MapNpc = { id: string; label: string; x: number; y: number; color: string; interaction: string };
 type MapExit = { id: string; x: number; y: number; w: number; h: number; target: MapId; spawn: { x: number; y: number }; minutes: number; endDay?: boolean };
 type MapDefinition = { label: string; width: number; height: number; background: string; spawn: { x: number; y: number }; walls: Array<{ x: number; y: number; w: number; h: number }>; exits: MapExit[]; npcs: MapNpc[] };
+type PhysicsRectangle = Phaser.GameObjects.Rectangle & { body: Phaser.Physics.Arcade.Body };
 const maps = mapData.maps as Record<MapId, MapDefinition>;
 
 const PLAYER_SPEED = 150;
 const INTERACTION_DISTANCE = 62;
+type FacingDirection = "north" | "north-east" | "east" | "south-east" | "south" | "south-west" | "west" | "north-west";
 
 class SpatialScene extends Phaser.Scene {
   private mapId: MapId = "campus_center";
-  private player!: Phaser.GameObjects.Rectangle;
+  private player!: PhysicsRectangle;
   private walls!: Phaser.Physics.Arcade.StaticGroup;
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private keys!: Record<string, Phaser.Input.Keyboard.Key>;
@@ -38,6 +40,8 @@ class SpatialScene extends Phaser.Scene {
   private nameLabels: Phaser.GameObjects.Text[] = [];
   private transitioning = false;
   private npcLocations: Record<string, MapId> = {};
+  private facing: FacingDirection = "south";
+  private animationClock = 0;
 
   constructor() {
     super("spatial-scene");
@@ -54,7 +58,8 @@ class SpatialScene extends Phaser.Scene {
   update() {
     if (!this.player || !this.cursors) return;
     if (this.hooks.isInputLocked?.()) {
-      this.player.setVelocity(0, 0);
+      this.player.body.setVelocity(0, 0);
+      this.player.setScale(1, 1);
       return;
     }
     const left = this.cursors.left.isDown || this.keys.A.isDown;
@@ -62,9 +67,43 @@ class SpatialScene extends Phaser.Scene {
     const up = this.cursors.up.isDown || this.keys.W.isDown;
     const down = this.cursors.down.isDown || this.keys.S.isDown;
     const vector = new Phaser.Math.Vector2(Number(right) - Number(left), Number(down) - Number(up));
-    if (vector.lengthSq() > 0) vector.normalize().scale(PLAYER_SPEED);
-    this.player.setVelocity(vector.x, vector.y);
+    const moving = vector.lengthSq() > 0;
+    if (moving) {
+      this.facing = this.resolveFacing(vector.x, vector.y);
+      this.animationClock += 0.18;
+      this.player.setRotation(this.facingAngle(this.facing));
+      this.player.setScale(1, 1 + Math.sin(this.animationClock) * 0.035);
+      vector.normalize().scale(PLAYER_SPEED);
+    } else {
+      this.player.setScale(1, 1);
+    }
+    this.player.body.setVelocity(vector.x, vector.y);
     this.publishState();
+  }
+
+  private resolveFacing(x: number, y: number): FacingDirection {
+    if (x === 0 && y < 0) return "north";
+    if (x > 0 && y < 0) return "north-east";
+    if (x > 0 && y === 0) return "east";
+    if (x > 0 && y > 0) return "south-east";
+    if (x === 0 && y > 0) return "south";
+    if (x < 0 && y > 0) return "south-west";
+    if (x < 0 && y === 0) return "west";
+    return "north-west";
+  }
+
+  private facingAngle(direction: FacingDirection): number {
+    const angles: Record<FacingDirection, number> = {
+      north: 0,
+      "north-east": Math.PI / 4,
+      east: Math.PI / 2,
+      "south-east": (Math.PI * 3) / 4,
+      south: Math.PI,
+      "south-west": (Math.PI * 5) / 4,
+      west: (Math.PI * 3) / 2,
+      "north-west": (Math.PI * 7) / 4,
+    };
+    return angles[direction];
   }
 
   public interact() {
@@ -104,7 +143,7 @@ class SpatialScene extends Phaser.Scene {
       this.walls.add(body);
     }
     const initial = spawn ?? definition.spawn;
-    this.player = this.add.rectangle((initial.x + 0.5) * mapData.tileSize, (initial.y + 0.5) * mapData.tileSize, 22, 28, 0xe9e0bd);
+    this.player = this.add.rectangle((initial.x + 0.5) * mapData.tileSize, (initial.y + 0.5) * mapData.tileSize, 22, 28, 0xe9e0bd) as PhysicsRectangle;
     this.physics.add.existing(this.player);
     this.player.setDepth(10);
     this.physics.add.collider(this.player, this.walls);

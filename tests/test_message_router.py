@@ -153,3 +153,23 @@ async def test_spatial_visibility_can_be_narrower_than_response_targets(tmp_path
     )
 
     assert written[0]["visible_to"] == ["linxi", "narrator"]
+
+
+@pytest.mark.asyncio
+async def test_spatial_tool_result_keeps_interaction_id(tmp_path, monkeypatch):
+    written: list[dict] = []
+
+    async def fake_append_message(message: dict) -> None:
+        written.append(dict(message))
+
+    monkeypatch.setattr(router_module, "append_message", fake_append_message)
+    monkeypatch.setattr(router_module, "read_turn_counter", lambda: 4)
+
+    await MessageRouter().broadcast_tool_result(
+        ["linxi"],
+        {"name": "move_npc", "ok": True},
+        interaction_id="abc123",
+    )
+
+    assert written[0]["role"] == "tool"
+    assert written[0]["interaction_id"] == "abc123"

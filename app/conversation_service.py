@@ -30,6 +30,9 @@ from models.spatial import MapId, move_npc
 class ConversationService:
     """单个角色的一次对话编排。无状态，直接调用 CharacterRepository 单例。"""
 
+    def __init__(self) -> None:
+        self._last_tool_results: list[dict] = []
+
     async def run_turn(
         self,
         character: Character,
@@ -50,13 +53,18 @@ class ConversationService:
             usage_agent=character.name,
             model_name=config["model_id"],
         )
-        self._apply_tool_calls(character.name, output.tool_calls)
+        self._last_tool_results = self._apply_tool_calls(character.name, output.tool_calls)
         self._apply_updates(character.name, output)
         return output
 
-    def _apply_tool_calls(self, agent_name: str, tool_calls: list[LLMToolCall]) -> None:
+    def consume_tool_results(self) -> list[dict]:
+        results, self._last_tool_results = self._last_tool_results, []
+        return results
+
+    def _apply_tool_calls(self, agent_name: str, tool_calls: list[LLMToolCall]) -> list[dict]:
         """执行角色允许的语义工具；任何越权或坐标式调用都被拒绝。"""
         valid_maps = {"campus_center", "arts_hallway", "clubroom", "rooftop"}
+        results: list[dict] = []
         for call in tool_calls:
             if call.name != "move_npc" or call.npc_id != agent_name:
                 routing_logger.warning(
@@ -65,6 +73,7 @@ class ConversationService:
                     call.name,
                     call.npc_id,
                 )
+                results.append({"name": call.name, "ok": False, "reason": "only_self"})
                 continue
             if call.destination not in valid_maps:
                 routing_logger.warning(
@@ -72,6 +81,7 @@ class ConversationService:
                     agent_name,
                     call.destination,
                 )
+                results.append({"name": call.name, "ok": False, "reason": "invalid_destination"})
                 continue
             state = read_spatial_state()
             updated = move_npc(
@@ -80,6 +90,13 @@ class ConversationService:
                 destination=cast(MapId, call.destination),
             )
             write_spatial_state(updated)
+            results.append({
+                "name": call.name,
+                "ok": True,
+                "npc_id": agent_name,
+                "destination": call.destination,
+            })
+        return results
 
     def _build_prompt(
         self,
