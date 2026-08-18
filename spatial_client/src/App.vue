@@ -14,6 +14,7 @@ const dialogueBusy = ref(false);
 const dialogueChoices = ref<string[]>([]);
 const dialogueMessages = ref<Array<{ author: string; content: string; kind?: string }>>([]);
 const dialogueVisibility = ref<"public" | "private">("public");
+const dialogueRetryText = ref("");
 const profileOpen = ref(false);
 const profileLoading = ref(false);
 const profileAgent = ref("linxi");
@@ -34,6 +35,7 @@ const mapLabels: Record<MapId, string> = {
 };
 
 const interactionHint = computed(() => {
+  if (gameState.value.nearbyNpc?.kind === "ambient") return `E 查看 · ${gameState.value.nearbyNpc.label}`;
   if (gameState.value.nearbyNpc) return `E 交谈 · ${gameState.value.nearbyNpc.label}`;
   if (gameState.value.nearbyExit?.endDay) return "E 返回宿舍并结束今天";
   if (gameState.value.nearbyExit) return `E 进入 · ${mapLabels[gameState.value.nearbyExit.target]}`;
@@ -72,6 +74,10 @@ async function transition(request: { fromMap: MapId; exitId: string }) {
 }
 
 function interact() {
+  if (gameState.value.nearbyNpc?.kind === "ambient") {
+    message.value = gameState.value.nearbyNpc.bubble || `${gameState.value.nearbyNpc.label}从你身边经过。`;
+    return;
+  }
   if (gameState.value.nearbyNpc) {
     panelOpen.value = true;
     message.value = `已接近${gameState.value.nearbyNpc.label}。可以面对面交谈。`;
@@ -101,7 +107,7 @@ async function endDay() {
   }
 }
 
-async function openProfile(agent = gameState.value.nearbyNpc?.id ?? profileAgent.value) {
+async function openProfile(agent = gameState.value.nearbyNpc?.kind === "major" ? gameState.value.nearbyNpc.id : profileAgent.value) {
   profileAgent.value = agent;
   profileOpen.value = true;
   profileLoading.value = true;
@@ -178,20 +184,23 @@ function appendDialogue(author: string, content: string, kind = "") {
   if (content.trim()) dialogueMessages.value.push({ author, content: content.trim(), kind });
 }
 
-async function sendDialogue(content = dialogueInput.value) {
+async function sendDialogue(content = dialogueInput.value, recordPlayer = true) {
   const text = content.trim();
   const target = gameState.value.nearbyNpc;
-  if (!text || !target || dialogueBusy.value) return;
+  if (!text || !target || target.kind !== "major" || dialogueBusy.value) return;
   dialogueInput.value = "";
   dialogueBusy.value = true;
   dialogueChoices.value = [];
-  dialogueController = new AbortController();
-  appendDialogue("我", text, "player");
+  dialogueRetryText.value = "";
+  const controller = new AbortController();
+  dialogueController = controller;
+  if (recordPlayer) appendDialogue("我", text, "player");
+  let receivedDone = false;
   try {
     const response = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
-      signal: dialogueController.signal,
+      signal: controller.signal,
       body: JSON.stringify({
         message: text,
         spatial: {
@@ -231,6 +240,7 @@ async function sendDialogue(content = dialogueInput.value) {
         }
         if (event === "agent") appendDialogue(data.author ?? target.label, data.content ?? "", "agent");
         if (event === "choices") dialogueChoices.value = data.choices ?? [];
+        if (event === "done") receivedDone = true;
         if (event === "spatial_state") {
           if (data.story_time?.display) gameTime.value = data.story_time.display;
           if (data.npc_locations) {
@@ -242,16 +252,18 @@ async function sendDialogue(content = dialogueInput.value) {
       }
       if (done) break;
     }
+    if (!receivedDone && !controller.signal.aborted) throw new Error("dialogue stream interrupted");
     dialogueBusy.value = false;
   } catch {
     dialogueBusy.value = false;
-    if (dialogueController?.signal.aborted) {
+    if (controller.signal.aborted) {
       appendDialogue("系统", "本轮对话已停止。", "error");
     } else {
+      dialogueRetryText.value = text;
       appendDialogue("系统", "对话服务暂不可用，请稍后再试。", "error");
     }
   } finally {
-    dialogueController = null;
+    if (dialogueController === controller) dialogueController = null;
   }
 }
 
@@ -355,6 +367,7 @@ function onKeyDown(event: KeyboardEvent) {
         <input v-model="dialogueInput" :disabled="dialogueBusy" placeholder="说点什么……" aria-label="对话输入" />
         <button type="submit" :disabled="dialogueBusy || !dialogueInput.trim()">发送</button>
       </form>
+      <button v-if="dialogueRetryText && !dialogueBusy" class="retry-dialogue" type="button" @click="sendDialogue(dialogueRetryText, false)">重试上一句</button>
     </section>
     <aside v-if="profileOpen" class="profile-panel" aria-live="polite">
       <button class="close-button" type="button" @click="profileOpen = false">×</button>

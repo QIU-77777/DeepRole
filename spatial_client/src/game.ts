@@ -6,7 +6,7 @@ export type MapId = "campus_center" | "arts_hallway" | "clubroom" | "rooftop";
 export interface SpatialGameState {
   mapId: MapId;
   player: { x: number; y: number };
-  nearbyNpc: { id: string; label: string; interaction: string } | null;
+  nearbyNpc: { id: string; label: string; interaction: string; kind: "major" | "ambient"; bubble?: string } | null;
   nearbyExit: { id: string; target: MapId; endDay?: boolean } | null;
 }
 
@@ -17,7 +17,7 @@ type Hooks = {
   npcLocations?: Record<string, MapId>;
 };
 
-type MapNpc = { id: string; label: string; x: number; y: number; color: string; interaction: string };
+type MapNpc = { id: string; label: string; x: number; y: number; color: string; interaction: string; kind?: "major" | "ambient"; bubble?: string };
 type MapExit = { id: string; x: number; y: number; w: number; h: number; target: MapId; spawn: { x: number; y: number }; minutes: number; endDay?: boolean };
 type MapDefinition = { label: string; width: number; height: number; background: string; spawn: { x: number; y: number }; walls: Array<{ x: number; y: number; w: number; h: number }>; exits: MapExit[]; npcs: MapNpc[] };
 type PhysicsRectangle = Phaser.GameObjects.Rectangle & { body: Phaser.Physics.Arcade.Body };
@@ -207,7 +207,13 @@ class SpatialScene extends Phaser.Scene {
     return {
       mapId: this.mapId,
       player: { x: Math.round(this.player.x), y: Math.round(this.player.y) },
-      nearbyNpc: nearestNpc ? { id: nearestNpc.id, label: nearestNpc.label, interaction: nearestNpc.interaction } : null,
+      nearbyNpc: nearestNpc ? {
+        id: nearestNpc.id,
+        label: nearestNpc.label,
+        interaction: nearestNpc.interaction,
+        kind: nearestNpc.kind ?? "major",
+        bubble: nearestNpc.bubble,
+      } : null,
       nearbyExit: nearestExit ? { id: nearestExit.id, target: nearestExit.target as MapId, endDay: nearestExit.endDay } : null,
     };
   }

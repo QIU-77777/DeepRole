@@ -43,6 +43,7 @@ h1 { margin-bottom: 0; font-size: clamp(22px, 3vw, 34px); font-weight: 600; }
 .dialogue-composer { display: flex; gap: 8px; margin-top: 14px; }
 .dialogue-composer input { min-width: 0; flex: 1; border: 1px solid #f4e7c733; border-radius: 8px; background: #0e1915cc; color: #f8f0dc; padding: 9px 10px; outline: none; }
 .dialogue-composer button:disabled, .dialogue-choices button:disabled, .close-button:disabled { cursor: not-allowed; opacity: .5; }
+.retry-dialogue { margin-top: 8px; border: 0; background: transparent; color: #f0c67b; font-size: 12px; cursor: pointer; }
 .profile-panel { position: absolute; z-index: 9; top: 22px; right: 26px; width: min(410px, calc(100% - 52px)); max-height: calc(100% - 44px); overflow: auto; padding: 20px 24px; border: 1px solid #f4e7c733; border-radius: 16px; background: #17231fee; box-shadow: 0 12px 36px #0c1511cc; backdrop-filter: blur(10px); }
 .profile-panel h2 { margin-bottom: 10px; font-size: 22px; }
 .profile-relation { display: grid; gap: 4px; margin-bottom: 14px; padding: 9px 10px; border-radius: 8px; background: #f0c67b1a; color: #d6ddcf; font-size: 12px; line-height: 1.5; }

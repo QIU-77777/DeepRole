@@ -19,7 +19,9 @@
         { "id": "to_arts_hallway", "x": 30, "y": 8, "w": 2, "h": 4, "target": "arts_hallway", "spawn": { "x": 2, "y": 10 }, "minutes": 10 },
         { "id": "to_dorm", "x": 14, "y": 18, "w": 4, "h": 2, "target": "campus_center", "spawn": { "x": 16, "y": 17 }, "minutes": 0, "endDay": true }
       ],
-      "npcs": []
+      "npcs": [
+        { "id": "ambient_student", "label": "路过的学生", "x": 8, "y": 9, "color": "#91b6a1", "interaction": "环境气泡", "kind": "ambient", "bubble": "公告栏上贴着新的演出海报，边角还没压平。" }
+      ]
     },
     "arts_hallway": {
       "label": "艺术楼走廊",

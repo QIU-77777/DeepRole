@@ -22,3 +22,5 @@ npm run build
 ## 灰盒地图
 
 `src/maps/graybox.json` 使用与 Tiled 对象层相近的结构，暂时作为四张地图的占位数据。正式地图接入时保持 `map_id`、出口 `id`、waypoint 和交互对象 ID 稳定，再替换为 Tiled JSON 导出物。
+
+地图中的 `kind: "ambient"` NPC 只显示预写环境气泡，不进入 AI 对话流；未标记的 NPC 默认按主要角色处理。
