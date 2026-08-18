@@ -27,11 +27,24 @@ def read_spatial_state() -> SpatialState:
         return default_spatial_state()
     try:
         restored = SpatialState.model_validate(payload)
-        # Older runtime files predate semantic waypoints and may also carry
-        # locations from a previous story-time projection. Re-apply the
-        # deterministic projection on read so the client always receives a
-        # complete, time-consistent state without requiring a manual reset.
-        return apply_story_environment(apply_npc_schedules(restored))
+        # Older runtime files predate semantic waypoints. Re-project only the
+        # NPC ids already present in that save: migration must not invent
+        # characters that an intentionally partial test/story state omitted.
+        projected = apply_story_environment(apply_npc_schedules(restored))
+        present_ids = set(restored.npc_locations) | set(restored.npc_overrides)
+        return restored.model_copy(update={
+            "weather": projected.weather,
+            "npc_locations": {
+                npc_id: projected.npc_locations[npc_id]
+                for npc_id in present_ids
+                if npc_id in projected.npc_locations
+            },
+            "npc_waypoints": {
+                npc_id: projected.npc_waypoints[npc_id]
+                for npc_id in present_ids
+                if npc_id in projected.npc_waypoints
+            },
+        })
     except (TypeError, ValueError):
         return default_spatial_state()
 
