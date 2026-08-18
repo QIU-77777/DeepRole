@@ -13,9 +13,16 @@ export interface SpatialGameState {
 
 type Hooks = {
   onState: (state: SpatialGameState) => void;
-  onTransition?: (request: { fromMap: MapId; exitId: string }) => Promise<{ mapId: MapId; x: number; y: number } | null>;
+  onTransition?: (request: { fromMap: MapId; exitId: string }) => Promise<{
+    mapId: MapId;
+    x: number;
+    y: number;
+    npcLocations?: Record<string, MapId>;
+    npcWaypoints?: Record<string, string>;
+  } | null>;
   isInputLocked?: () => boolean;
   npcLocations?: Record<string, MapId>;
+  npcWaypoints?: Record<string, string>;
 };
 
 type PhysicsRectangle = Phaser.GameObjects.Rectangle & { body: Phaser.Physics.Arcade.Body };
@@ -38,6 +45,7 @@ class SpatialScene extends Phaser.Scene {
   private nameLabels: Phaser.GameObjects.Text[] = [];
   private transitioning = false;
   private npcLocations: Record<string, MapId> = {};
+  private npcWaypoints: Record<string, string> = {};
   private facing: FacingDirection = "south";
   private animationClock = 0;
 
@@ -48,6 +56,7 @@ class SpatialScene extends Phaser.Scene {
   create(data: { hooks: Hooks; mapId?: MapId; spawn?: { x: number; y: number } }) {
     this.hooks = data.hooks;
     this.npcLocations = data.hooks.npcLocations ?? {};
+    this.npcWaypoints = data.hooks.npcWaypoints ?? {};
     this.cursors = this.input.keyboard!.createCursorKeys();
     this.keys = this.input.keyboard!.addKeys("W,A,S,D,E") as Record<string, Phaser.Input.Keyboard.Key>;
     this.loadMap(data.mapId ?? "campus_center", data.spawn);
@@ -114,8 +123,9 @@ class SpatialScene extends Phaser.Scene {
     this.loadMap(mapId, spawn);
   }
 
-  public updateNpcLocations(locations: Record<string, MapId>) {
+  public updateNpcLocations(locations: Record<string, MapId>, waypoints: Record<string, string> = this.npcWaypoints) {
     this.npcLocations = locations;
+    this.npcWaypoints = waypoints;
     this.loadMap(this.mapId, {
       x: this.player.x / mapData.tileSize - 0.5,
       y: this.player.y / mapData.tileSize - 0.5,
@@ -165,7 +175,11 @@ class SpatialScene extends Phaser.Scene {
   }
 
   private addNpc(npc: MapNpc) {
-    const body = this.add.rectangle((npc.x + 0.5) * mapData.tileSize, (npc.y + 0.5) * mapData.tileSize, 24, 30, Number(npc.color.replace("#", "0x")));
+    const waypoint = this.npcWaypoints[npc.id] ?? npc.waypoint;
+    const anchor = waypoint ? maps[this.mapId].waypoints[waypoint] : undefined;
+    const x = anchor?.x ?? npc.x;
+    const y = anchor?.y ?? npc.y;
+    const body = this.add.rectangle((x + 0.5) * mapData.tileSize, (y + 0.5) * mapData.tileSize, 24, 30, Number(npc.color.replace("#", "0x")));
     body.setDepth(9);
     const label = this.add.text(body.x, body.y - 28, npc.label, { color: "#fff8e5", fontFamily: "sans-serif", fontSize: "13px", backgroundColor: "#17231fcc", padding: { x: 4, y: 2 } }).setOrigin(0.5, 1).setDepth(20);
     this.npcs.push({ data: npc, body });
@@ -180,6 +194,8 @@ class SpatialScene extends Phaser.Scene {
       this.transitioning = true;
       const serverState = await this.hooks.onTransition?.({ fromMap: this.mapId, exitId: exit.id });
       if (serverState) {
+        if (serverState.npcLocations) this.npcLocations = serverState.npcLocations;
+        if (serverState.npcWaypoints) this.npcWaypoints = serverState.npcWaypoints;
         this.switchMap(serverState.mapId, {
           x: serverState.x / mapData.tileSize - 0.5,
           y: serverState.y / mapData.tileSize - 0.5,

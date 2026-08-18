@@ -76,8 +76,8 @@ CHARACTER = r"""<goal>
 - memory 每轮必写，其余字段不需要更新时省略或留空
 
 **tool_calls（只在确实移动自己时使用）**
-- 允许的唯一工具是 `move_npc`，字段为 `{{"name":"move_npc","npc_id":"你的agent id","destination":"地图id"}}`。
-- 只能移动你自己，destination 只能是 `campus_center`、`arts_hallway`、`clubroom` 或 `rooftop`；不能写坐标、传送玩家或移动其他角色。
+- 允许的唯一工具是 `move_npc`，字段为 `{{"name":"move_npc","npc_id":"你的agent id","destination":"地图id","waypoint":"语义位置名"}}`。
+- 只能移动你自己，destination 只能是 `campus_center`、`arts_hallway`、`clubroom` 或 `rooftop`；waypoint 只能使用该地图已配置的位置名；不能写坐标、传送玩家或移动其他角色。
 - 没有需要移动时必须输出空数组。
 </rules>
 

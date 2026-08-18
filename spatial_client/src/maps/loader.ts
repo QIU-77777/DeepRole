@@ -9,6 +9,7 @@ export type MapNpc = {
   interaction: string;
   kind?: "major" | "ambient";
   bubble?: string;
+  waypoint?: string;
 };
 
 export type MapExit = {
@@ -32,6 +33,7 @@ export type MapDefinition = {
   walls: Array<{ x: number; y: number; w: number; h: number }>;
   exits: MapExit[];
   npcs: MapNpc[];
+  waypoints: Record<string, { x: number; y: number }>;
 };
 
 export type MapCollection = { tileSize: number; maps: Record<MapId, MapDefinition> };
@@ -83,7 +85,14 @@ export function normalizeMapData(source: unknown): MapCollection {
     interaction: String(property(object, "interaction") || "主要角色"),
     kind: (String(property(object, "kind") || "major") as "major" | "ambient"),
     bubble: String(property(object, "bubble") || "") || undefined,
+    waypoint: String(property(object, "waypoint") || "") || undefined,
   }));
+  const waypoints = Object.fromEntries(
+    objectLayer(value, "waypoints").map((object) => [
+      object.name || `waypoint-${object.id}`,
+      { x: object.x / tileSize, y: object.y / tileSize },
+    ]),
+  );
   return {
     tileSize,
     maps: {
@@ -101,6 +110,7 @@ export function normalizeMapData(source: unknown): MapCollection {
         })),
         exits,
         npcs,
+        waypoints,
       },
     } as Record<MapId, MapDefinition>,
   };

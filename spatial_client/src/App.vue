@@ -27,6 +27,7 @@ const saveNotice = ref("");
 const saves = ref<Array<{ filename: string; title?: string; created_at?: string }>>([]);
 const availableEvent = ref<{ event_id: string; label: string; prompt: string } | null>(null);
 let npcLocations: Record<string, MapId> = {};
+let npcWaypoints: Record<string, string> = {};
 let dialogueController: AbortController | null = null;
 let game: Phaser.Game | null = null;
 
@@ -72,7 +73,15 @@ async function transition(request: { fromMap: MapId; exitId: string }) {
     gameWeather.value = state.weather ?? gameWeather.value;
     gamePhase.value = state.day_phase ?? gamePhase.value;
     availableEvent.value = state.available_events?.[0] ?? null;
-    return { mapId: state.player.map_id as MapId, x: state.player.x, y: state.player.y };
+    npcLocations = state.npc_locations ?? npcLocations;
+    npcWaypoints = state.npc_waypoints ?? npcWaypoints;
+    return {
+      mapId: state.player.map_id as MapId,
+      x: state.player.x,
+      y: state.player.y,
+      npcLocations,
+      npcWaypoints,
+    };
   } catch {
     message.value = "出口服务暂不可用，使用本地灰盒切换。";
     return null;
@@ -117,7 +126,11 @@ async function endDay() {
     gameTime.value = state.story_time.display;
     gameWeather.value = state.weather ?? gameWeather.value;
     gamePhase.value = state.day_phase ?? gamePhase.value;
+    npcLocations = state.npc_locations ?? npcLocations;
+    npcWaypoints = state.npc_waypoints ?? npcWaypoints;
     const scene = game?.scene.getScene("spatial-scene") as { switchMap?: (mapId: MapId, spawn: { x: number; y: number }) => void } | undefined;
+    const spatialScene = game?.scene.getScene("spatial-scene") as { updateNpcLocations?: (locations: Record<string, MapId>, waypoints?: Record<string, string>) => void } | undefined;
+    spatialScene?.updateNpcLocations?.(npcLocations, npcWaypoints);
     scene?.switchMap?.("campus_center", {
       x: state.player.x / 32 - 0.5,
       y: state.player.y / 32 - 0.5,
@@ -254,6 +267,7 @@ async function sendDialogue(content = dialogueInput.value, recordPlayer = true) 
           weather?: string;
           day_phase?: string;
           npc_locations?: Record<string, MapId>;
+          npc_waypoints?: Record<string, string>;
           available_events?: Array<{ event_id: string; label: string; prompt: string }>;
         };
         const event = data.type;
@@ -271,8 +285,10 @@ async function sendDialogue(content = dialogueInput.value, recordPlayer = true) 
           if (data.day_phase) gamePhase.value = data.day_phase;
           availableEvent.value = data.available_events?.[0] ?? availableEvent.value;
           if (data.npc_locations) {
-            const scene = game?.scene.getScene("spatial-scene") as { updateNpcLocations?: (locations: Record<string, MapId>) => void } | undefined;
-            scene?.updateNpcLocations?.(data.npc_locations);
+            npcLocations = data.npc_locations;
+            npcWaypoints = data.npc_waypoints ?? npcWaypoints;
+            const scene = game?.scene.getScene("spatial-scene") as { updateNpcLocations?: (locations: Record<string, MapId>, waypoints?: Record<string, string>) => void } | undefined;
+            scene?.updateNpcLocations?.(npcLocations, npcWaypoints);
           }
         }
         if (event === "response_done") dialogueBusy.value = false;
@@ -314,6 +330,7 @@ onMounted(async () => {
       gameWeather.value = state.weather ?? gameWeather.value;
       gamePhase.value = state.day_phase ?? gamePhase.value;
       npcLocations = state.npc_locations ?? {};
+      npcWaypoints = state.npc_waypoints ?? {};
       availableEvent.value = state.available_events?.[0] ?? null;
     }
   } catch {
@@ -325,6 +342,7 @@ onMounted(async () => {
       onTransition: transition,
       isInputLocked: () => panelOpen.value,
       npcLocations,
+      npcWaypoints,
     });
     gameReady.value = true;
   }

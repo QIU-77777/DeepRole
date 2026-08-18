@@ -34,6 +34,7 @@ class LLMToolCall(BaseModel):
     name: Literal["move_npc"]
     npc_id: str
     destination: str
+    waypoint: str = ""
 
 
 class LLMCharacterOutput(BaseModel):

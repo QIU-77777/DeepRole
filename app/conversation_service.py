@@ -84,17 +84,29 @@ class ConversationService:
                 results.append({"name": call.name, "ok": False, "reason": "invalid_destination"})
                 continue
             state = read_spatial_state()
-            updated = move_npc(
-                state,
-                npc_id=agent_name,
-                destination=cast(MapId, call.destination),
-            )
+            try:
+                updated = move_npc(
+                    state,
+                    npc_id=agent_name,
+                    destination=cast(MapId, call.destination),
+                    waypoint=call.waypoint,
+                )
+            except ValueError:
+                routing_logger.warning(
+                    "[%s] 拒绝非法 waypoint: %s/%s",
+                    agent_name,
+                    call.destination,
+                    call.waypoint,
+                )
+                results.append({"name": call.name, "ok": False, "reason": "invalid_waypoint"})
+                continue
             write_spatial_state(updated)
             results.append({
                 "name": call.name,
                 "ok": True,
                 "npc_id": agent_name,
                 "destination": call.destination,
+                "waypoint": call.waypoint or updated.npc_waypoints.get(agent_name, ""),
                 "route": updated.npc_routes.get(agent_name, []),
             })
         return results

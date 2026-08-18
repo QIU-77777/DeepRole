@@ -480,6 +480,7 @@ class SpatialTransitionRequest(BaseModel):
 class SpatialNpcMoveRequest(BaseModel):
     npc_id: str
     destination: MapId
+    waypoint: str = ""
     reason: str = ""
 
 
@@ -518,7 +519,14 @@ async def api_spatial_npc_move(req: SpatialNpcMoveRequest) -> JSONResponse:
     """语义 NPC 移动工具边界：调用方只能给角色和目的地，不能写坐标。"""
     state = read_spatial_state()
     try:
-        updated = move_npc(state, npc_id=req.npc_id, destination=req.destination)
+        updated = move_npc(
+            state,
+            npc_id=req.npc_id,
+            destination=req.destination,
+            waypoint=req.waypoint,
+        )
+    except ValueError:
+        return JSONResponse({"detail": "NPC waypoint 不存在。"}, status_code=400)
     except KeyError:
         return JSONResponse({"detail": "NPC 不存在或不允许由空间工具移动。"}, status_code=404)
     return JSONResponse(_spatial_state_payload(write_spatial_state(updated)))

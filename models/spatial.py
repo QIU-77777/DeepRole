@@ -50,6 +50,7 @@ class SpatialState(BaseModel):
     npc_locations: dict[str, MapId] = Field(default_factory=dict)
     npc_overrides: dict[str, MapId] = Field(default_factory=dict)
     npc_routes: dict[str, list[MapId]] = Field(default_factory=dict)
+    npc_waypoints: dict[str, str] = Field(default_factory=dict)
     triggered_events: list[str] = Field(default_factory=list)
 
     @property
@@ -69,6 +70,12 @@ class SpatialState(BaseModel):
 
 
 SPATIAL_NPC_IDS: tuple[str, ...] = ("linxi", "shenzhiyi")
+SPATIAL_WAYPOINTS: dict[MapId, tuple[str, ...]] = {
+    "campus_center": ("fountain", "dorm_exit"),
+    "arts_hallway": ("hall_north", "clubroom_door"),
+    "clubroom": ("rehearsal_table", "window", "door"),
+    "rooftop": ("railing", "stairs"),
+}
 
 
 class SpatialEventDefinition(BaseModel):
@@ -111,15 +118,32 @@ def scheduled_npc_map(npc_id: str, story_time: StoryTime) -> MapId:
     raise KeyError(npc_id)
 
 
+def scheduled_npc_waypoint(npc_id: str, story_time: StoryTime) -> str:
+    location = scheduled_npc_map(npc_id, story_time)
+    if npc_id == "linxi" and location == "clubroom":
+        return "rehearsal_table"
+    if npc_id == "shenzhiyi" and location == "clubroom":
+        return "window"
+    return SPATIAL_WAYPOINTS[location][0]
+
+
 def apply_npc_schedules(state: SpatialState) -> SpatialState:
     """按故事时间投影主要 NPC 的离屏位置。"""
     locations = dict(state.npc_locations)
     for npc_id in SPATIAL_NPC_IDS:
-        locations[npc_id] = state.npc_overrides.get(
+        location = state.npc_overrides.get(
             npc_id,
             scheduled_npc_map(npc_id, state.story_time),
         )
-    return state.model_copy(update={"npc_locations": locations})
+        locations[npc_id] = location
+    waypoints = dict(state.npc_waypoints)
+    for npc_id in SPATIAL_NPC_IDS:
+        if npc_id in state.npc_overrides:
+            if waypoints.get(npc_id) not in SPATIAL_WAYPOINTS[locations[npc_id]]:
+                waypoints[npc_id] = SPATIAL_WAYPOINTS[locations[npc_id]][0]
+        else:
+            waypoints[npc_id] = scheduled_npc_waypoint(npc_id, state.story_time)
+    return state.model_copy(update={"npc_locations": locations, "npc_waypoints": waypoints})
 
 
 def weather_for_story_time(story_time: StoryTime) -> str:
@@ -226,10 +250,13 @@ def transition_spatial_state(state: SpatialState, *, from_map: MapId, exit_id: s
     return apply_story_environment(apply_npc_schedules(updated))
 
 
-def move_npc(state: SpatialState, *, npc_id: str, destination: MapId) -> SpatialState:
+def move_npc(state: SpatialState, *, npc_id: str, destination: MapId, waypoint: str = "") -> SpatialState:
     """通过语义 waypoint 移动 NPC；领域层不接受坐标或文本传送。"""
     if npc_id not in SPATIAL_NPC_IDS:
         raise KeyError(npc_id)
+    selected_waypoint = waypoint.strip() or SPATIAL_WAYPOINTS[destination][0]
+    if selected_waypoint not in SPATIAL_WAYPOINTS[destination]:
+        raise ValueError(f"未知 waypoint: {destination}/{selected_waypoint}")
     locations = dict(state.npc_locations)
     current = locations.get(npc_id, destination)
     route = find_map_route(current, destination)
@@ -242,6 +269,7 @@ def move_npc(state: SpatialState, *, npc_id: str, destination: MapId) -> Spatial
         "npc_locations": locations,
         "npc_overrides": overrides,
         "npc_routes": routes,
+        "npc_waypoints": {**state.npc_waypoints, npc_id: selected_waypoint},
     })
 
 
@@ -261,5 +289,6 @@ def end_story_day(state: SpatialState) -> SpatialState:
         }),
         "npc_overrides": {},
         "npc_routes": {},
+        "npc_waypoints": {},
     })
     return apply_story_environment(apply_npc_schedules(updated))

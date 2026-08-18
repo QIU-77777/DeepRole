@@ -66,6 +66,7 @@ def test_npc_schedule_projects_offscreen_locations_from_story_time() -> None:
     projected = apply_npc_schedules(evening)
 
     assert projected.npc_locations == {"linxi": "campus_center", "shenzhiyi": "rooftop"}
+    assert projected.npc_waypoints == {"linxi": "fountain", "shenzhiyi": "railing"}
 
 
 def test_spatial_event_rules_are_deterministic_and_one_shot() -> None:
@@ -98,5 +99,9 @@ def test_npc_route_uses_scene_exit_graph() -> None:
         "rooftop",
     ]
     state = SpatialState(npc_locations={"linxi": "campus_center"})
-    moved = move_npc(state, npc_id="linxi", destination="rooftop")
+    moved = move_npc(state, npc_id="linxi", destination="rooftop", waypoint="railing")
     assert moved.npc_routes["linxi"] == ["campus_center", "arts_hallway", "clubroom", "rooftop"]
+    assert moved.npc_waypoints["linxi"] == "railing"
+
+    with pytest.raises(ValueError):
+        move_npc(state, npc_id="linxi", destination="rooftop", waypoint="window")
