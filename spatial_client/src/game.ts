@@ -1,7 +1,8 @@
 import Phaser from "phaser";
 import mapData from "./maps/graybox.json";
+import { normalizeMapData, type MapDefinition, type MapExit, type MapNpc, type MapId as LoaderMapId } from "./maps/loader";
 
-export type MapId = "campus_center" | "arts_hallway" | "clubroom" | "rooftop";
+export type MapId = LoaderMapId;
 
 export interface SpatialGameState {
   mapId: MapId;
@@ -17,11 +18,8 @@ type Hooks = {
   npcLocations?: Record<string, MapId>;
 };
 
-type MapNpc = { id: string; label: string; x: number; y: number; color: string; interaction: string; kind?: "major" | "ambient"; bubble?: string };
-type MapExit = { id: string; x: number; y: number; w: number; h: number; target: MapId; spawn: { x: number; y: number }; minutes: number; endDay?: boolean };
-type MapDefinition = { label: string; width: number; height: number; background: string; spawn: { x: number; y: number }; walls: Array<{ x: number; y: number; w: number; h: number }>; exits: MapExit[]; npcs: MapNpc[] };
 type PhysicsRectangle = Phaser.GameObjects.Rectangle & { body: Phaser.Physics.Arcade.Body };
-const maps = mapData.maps as Record<MapId, MapDefinition>;
+const maps = normalizeMapData(mapData).maps;
 
 const PLAYER_SPEED = 150;
 const INTERACTION_DISTANCE = 62;
