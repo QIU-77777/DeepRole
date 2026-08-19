@@ -1,6 +1,17 @@
 """Shared test helpers available to all tests in this directory."""
 
+import pytest
+
 from app.llm_schema import LLMNarratorOutput
+
+
+@pytest.fixture(autouse=True)
+def _isolate_users_db(tmp_path_factory, monkeypatch):
+    """把 users.db 指向临时目录，避免测试写入真实 data/users.db。"""
+    import repository.user_store
+
+    db = tmp_path_factory.mktemp("users") / "users.db"
+    monkeypatch.setattr(repository.user_store, "_USERS_DB", db)
 
 
 def _narrator_output(**overrides) -> LLMNarratorOutput:
