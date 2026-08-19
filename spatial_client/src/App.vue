@@ -27,6 +27,7 @@ const saveNotice = ref("");
 const saves = ref<Array<{ filename: string; title?: string; created_at?: string }>>([]);
 const availableEvent = ref<{ event_id: string; label: string; prompt: string } | null>(null);
 const activeFollowers = ref<string[]>([]);
+const audioEnabled = ref(true);
 let npcLocations: Record<string, MapId> = {};
 let npcWaypoints: Record<string, string> = {};
 let initialMapId: MapId = "campus_center";
@@ -108,6 +109,12 @@ async function transition(request: { fromMap: MapId; exitId: string }) {
     message.value = "出口服务暂不可用，使用本地灰盒切换。";
     return null;
   }
+}
+
+function toggleAudio() {
+  audioEnabled.value = !audioEnabled.value;
+  const scene = game?.scene.getScene("spatial-scene") as { setAudioEnabled?: (enabled: boolean) => void } | undefined;
+  scene?.setAudioEnabled?.(audioEnabled.value);
 }
 
 async function triggerEvent() {
@@ -408,6 +415,7 @@ function onKeyDown(event: KeyboardEvent) {
         <span>{{ gameTime }}</span>
         <small>叙事时间 · {{ gamePhase }} · {{ gameWeather }}</small>
         <button class="profile-button" type="button" @click="openProfile()">人物档案</button>
+        <button class="profile-button" type="button" @click="toggleAudio()">声音：{{ audioEnabled ? "开" : "关" }}</button>
         <div class="save-controls">
           <button type="button" :disabled="saveBusy" @click="saveWorldline">保存世界线</button>
           <button type="button" @click="refreshSaves">读取列表</button>

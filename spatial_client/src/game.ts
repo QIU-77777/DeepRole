@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { SpatialAmbience } from "./ambience";
 import artsHallwayBackground from "./assets/arts-hallway-background.svg";
 import campusCenterBackground from "./assets/campus-center-background.svg";
 import clubroomBackground from "./assets/clubroom-background.svg";
@@ -68,6 +69,7 @@ class SpatialScene extends Phaser.Scene {
   private activeFollowers: string[] = [];
   private pendingNpcPaths: Record<string, GridPoint[]> = {};
   private playerVisual!: Phaser.GameObjects.Container;
+  private ambience = new SpatialAmbience();
   private facing: FacingDirection = "south";
   private animationClock = 0;
 
@@ -92,6 +94,9 @@ class SpatialScene extends Phaser.Scene {
     this.activeFollowers = data.hooks.activeFollowers ?? [];
     this.cursors = this.input.keyboard!.createCursorKeys();
     this.keys = this.input.keyboard!.addKeys("W,A,S,D,E") as Record<string, Phaser.Input.Keyboard.Key>;
+    this.input.keyboard?.once("keydown", () => this.ambience.unlock());
+    this.input.once("pointerdown", () => this.ambience.unlock());
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.ambience.dispose());
     const initialSpawn = data.hooks.initialPlayer
       ? { x: data.hooks.initialPlayer.x / mapData.tileSize - 0.5, y: data.hooks.initialPlayer.y / mapData.tileSize - 0.5 }
       : undefined;
@@ -146,6 +151,10 @@ class SpatialScene extends Phaser.Scene {
     this.loadMap(mapId, spawn);
   }
 
+  public setAudioEnabled(enabled: boolean) {
+    this.ambience.setEnabled(enabled);
+  }
+
   public updateNpcLocations(
     locations: Record<string, MapId>,
     waypoints: Record<string, string> = this.npcWaypoints,
@@ -174,6 +183,7 @@ class SpatialScene extends Phaser.Scene {
 
   private loadMap(mapId: MapId, spawn?: { x: number; y: number }) {
     this.mapId = mapId;
+    this.ambience.setScene(mapId);
     this.children.removeAll(true);
     this.npcs = [];
     this.exits = [];
