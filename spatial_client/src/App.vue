@@ -26,6 +26,7 @@ const saveBusy = ref(false);
 const saveNotice = ref("");
 const saves = ref<Array<{ filename: string; title?: string; created_at?: string }>>([]);
 const availableEvent = ref<{ event_id: string; label: string; prompt: string } | null>(null);
+const activeFollowers = ref<string[]>([]);
 let npcLocations: Record<string, MapId> = {};
 let npcWaypoints: Record<string, string> = {};
 let initialMapId: MapId = "campus_center";
@@ -41,6 +42,13 @@ const mapLabels: Record<MapId, string> = {
   clubroom: "剧社活动室",
   rooftop: "天台",
 };
+
+const characterLabels: Record<string, string> = {
+  linxi: "林溪",
+  shenzhiyi: "沈知意",
+};
+
+const followerLabel = computed(() => activeFollowers.value.map((id) => characterLabels[id] ?? id).join("、"));
 
 const interactionHint = computed(() => {
   if (gameState.value.nearbyNpc?.kind === "ambient") return `E 查看 · ${gameState.value.nearbyNpc.label}`;
@@ -87,12 +95,14 @@ async function transition(request: { fromMap: MapId; exitId: string }) {
     availableEvent.value = state.available_events?.[0] ?? null;
     npcLocations = state.npc_locations ?? npcLocations;
     npcWaypoints = state.npc_waypoints ?? npcWaypoints;
+    activeFollowers.value = state.active_followers ?? activeFollowers.value;
     return {
       mapId: state.player.map_id as MapId,
       x: state.player.x,
       y: state.player.y,
       npcLocations,
       npcWaypoints,
+      activeFollowers: activeFollowers.value,
     };
   } catch {
     message.value = "出口服务暂不可用，使用本地灰盒切换。";
@@ -140,9 +150,10 @@ async function endDay() {
     gamePhase.value = state.day_phase ?? gamePhase.value;
     npcLocations = state.npc_locations ?? npcLocations;
     npcWaypoints = state.npc_waypoints ?? npcWaypoints;
+    activeFollowers.value = state.active_followers ?? activeFollowers.value;
     const scene = game?.scene.getScene("spatial-scene") as { switchMap?: (mapId: MapId, spawn: { x: number; y: number }) => void } | undefined;
-    const spatialScene = game?.scene.getScene("spatial-scene") as { updateNpcLocations?: (locations: Record<string, MapId>, waypoints?: Record<string, string>) => void } | undefined;
-    spatialScene?.updateNpcLocations?.(npcLocations, npcWaypoints);
+    const spatialScene = game?.scene.getScene("spatial-scene") as { updateNpcLocations?: (locations: Record<string, MapId>, waypoints?: Record<string, string>, followers?: string[]) => void } | undefined;
+    spatialScene?.updateNpcLocations?.(npcLocations, npcWaypoints, activeFollowers.value);
     scene?.switchMap?.("campus_center", {
       x: state.player.x / 32 - 0.5,
       y: state.player.y / 32 - 0.5,
@@ -280,6 +291,7 @@ async function sendDialogue(content = dialogueInput.value, recordPlayer = true) 
           day_phase?: string;
           npc_locations?: Record<string, MapId>;
           npc_waypoints?: Record<string, string>;
+          active_followers?: string[];
           available_events?: Array<{ event_id: string; label: string; prompt: string }>;
         };
         const event = data.type;
@@ -299,8 +311,9 @@ async function sendDialogue(content = dialogueInput.value, recordPlayer = true) 
           if (data.npc_locations) {
             npcLocations = data.npc_locations;
             npcWaypoints = data.npc_waypoints ?? npcWaypoints;
-            const scene = game?.scene.getScene("spatial-scene") as { updateNpcLocations?: (locations: Record<string, MapId>, waypoints?: Record<string, string>) => void } | undefined;
-            scene?.updateNpcLocations?.(npcLocations, npcWaypoints);
+            activeFollowers.value = data.active_followers ?? activeFollowers.value;
+            const scene = game?.scene.getScene("spatial-scene") as { updateNpcLocations?: (locations: Record<string, MapId>, waypoints?: Record<string, string>, followers?: string[]) => void } | undefined;
+            scene?.updateNpcLocations?.(npcLocations, npcWaypoints, activeFollowers.value);
           }
         }
         if (event === "response_done") dialogueBusy.value = false;
@@ -346,6 +359,7 @@ onMounted(async () => {
       message.value = `在${mapLabels[initialMapId]}自由探索。靠近人物或出口后按 E。`;
       npcLocations = state.npc_locations ?? {};
       npcWaypoints = state.npc_waypoints ?? {};
+      activeFollowers.value = state.active_followers ?? [];
       availableEvent.value = state.available_events?.[0] ?? null;
     }
   } catch {
@@ -358,6 +372,7 @@ onMounted(async () => {
       isInputLocked: () => panelOpen.value,
       npcLocations,
       npcWaypoints,
+      activeFollowers: activeFollowers.value,
       mapId: initialMapId,
       initialPlayer,
     });
@@ -408,6 +423,7 @@ function onKeyDown(event: KeyboardEvent) {
         <i :class="{ active: gameState.mapId === 'clubroom' }"></i>
         <i :class="{ active: gameState.mapId === 'rooftop' }"></i>
       </div>
+      <small v-if="activeFollowers.length" class="follower-status">同行：{{ followerLabel }}</small>
     </aside>
     <div class="narration-bar">{{ message }}</div>
     <button v-if="availableEvent" class="event-hint" type="button" @click="triggerEvent">发现：{{ availableEvent.label }}</button>

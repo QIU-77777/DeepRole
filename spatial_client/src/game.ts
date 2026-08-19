@@ -36,6 +36,7 @@ type Hooks = {
   initialPlayer?: { x: number; y: number };
   npcLocations?: Record<string, MapId>;
   npcWaypoints?: Record<string, string>;
+  activeFollowers?: string[];
 };
 
 type PhysicsRectangle = Phaser.GameObjects.Rectangle & { body: Phaser.Physics.Arcade.Body };
@@ -44,6 +45,10 @@ const maps = mapData.maps;
 
 const PLAYER_SPEED = 150;
 const INTERACTION_DISTANCE = 62;
+const MAJOR_NPCS: Record<string, Omit<MapNpc, "x" | "y" | "waypoint">> = {
+  linxi: { id: "linxi", label: "林溪", color: "#cf6b67", interaction: "主要角色", kind: "major" },
+  shenzhiyi: { id: "shenzhiyi", label: "沈知意", color: "#d2ad58", interaction: "主要角色", kind: "major" },
+};
 type FacingDirection = "north" | "north-east" | "east" | "south-east" | "south" | "south-west" | "west" | "north-west";
 
 class SpatialScene extends Phaser.Scene {
@@ -60,6 +65,7 @@ class SpatialScene extends Phaser.Scene {
   private transitioning = false;
   private npcLocations: Record<string, MapId> = {};
   private npcWaypoints: Record<string, string> = {};
+  private activeFollowers: string[] = [];
   private pendingNpcPaths: Record<string, GridPoint[]> = {};
   private playerVisual!: Phaser.GameObjects.Container;
   private facing: FacingDirection = "south";
@@ -83,6 +89,7 @@ class SpatialScene extends Phaser.Scene {
     this.hooks = data.hooks;
     this.npcLocations = data.hooks.npcLocations ?? {};
     this.npcWaypoints = data.hooks.npcWaypoints ?? {};
+    this.activeFollowers = data.hooks.activeFollowers ?? [];
     this.cursors = this.input.keyboard!.createCursorKeys();
     this.keys = this.input.keyboard!.addKeys("W,A,S,D,E") as Record<string, Phaser.Input.Keyboard.Key>;
     const initialSpawn = data.hooks.initialPlayer
@@ -93,6 +100,7 @@ class SpatialScene extends Phaser.Scene {
 
   update() {
     if (!this.player || !this.cursors) return;
+    this.syncFollowerPositions();
     this.syncActorVisuals();
     if (this.hooks.isInputLocked?.()) {
       this.player.body.setVelocity(0, 0);
@@ -138,7 +146,11 @@ class SpatialScene extends Phaser.Scene {
     this.loadMap(mapId, spawn);
   }
 
-  public updateNpcLocations(locations: Record<string, MapId>, waypoints: Record<string, string> = this.npcWaypoints) {
+  public updateNpcLocations(
+    locations: Record<string, MapId>,
+    waypoints: Record<string, string> = this.npcWaypoints,
+    followers: string[] = this.activeFollowers,
+  ) {
     const definition = maps[this.mapId];
     for (const npc of this.npcs) {
       if (locations[npc.data.id] !== this.mapId) continue;
@@ -153,6 +165,7 @@ class SpatialScene extends Phaser.Scene {
     }
     this.npcLocations = locations;
     this.npcWaypoints = waypoints;
+    this.activeFollowers = followers;
     this.loadMap(this.mapId, {
       x: this.player.x / mapData.tileSize - 0.5,
       y: this.player.y / mapData.tileSize - 0.5,
@@ -192,6 +205,15 @@ class SpatialScene extends Phaser.Scene {
     for (const npc of definition.npcs) {
       const location = this.npcLocations[npc.id];
       if (!location || location === mapId) this.addNpc(npc);
+    }
+    for (const [npcId, location] of Object.entries(this.npcLocations)) {
+      if (location !== mapId || this.npcs.some((npc) => npc.data.id === npcId)) continue;
+      const template = MAJOR_NPCS[npcId];
+      if (!template) continue;
+      const waypoint = this.npcWaypoints[npcId];
+      const anchor = waypoint ? definition.waypoints[waypoint] : undefined;
+      const fallback = anchor ?? definition.spawn;
+      this.addNpc({ ...template, x: fallback.x, y: fallback.y, waypoint });
     }
     this.pendingNpcPaths = {};
     for (const exit of definition.exits) this.addExit(exit);
@@ -402,6 +424,27 @@ class SpatialScene extends Phaser.Scene {
     for (const npc of this.npcs) {
       npc.visual.setPosition(npc.body.x, npc.body.y).setDepth(15 + npc.body.y / 10000);
       npc.label.setPosition(npc.body.x, npc.body.y - 28).setDepth(30 + npc.body.y / 10000);
+    }
+  }
+
+  private syncFollowerPositions() {
+    const directions: Record<FacingDirection, { x: number; y: number }> = {
+      north: { x: 0, y: 1 },
+      "north-east": { x: -1, y: 1 },
+      east: { x: -1, y: 0 },
+      "south-east": { x: -1, y: -1 },
+      south: { x: 0, y: -1 },
+      "south-west": { x: 1, y: -1 },
+      west: { x: 1, y: 0 },
+      "north-west": { x: 1, y: 1 },
+    };
+    for (const npc of this.npcs) {
+      const index = this.activeFollowers.indexOf(npc.data.id);
+      if (index < 0) continue;
+      const spacing = 34 + index * 22;
+      const direction = directions[this.facing];
+      npc.body.x = Phaser.Math.Linear(npc.body.x, this.player.x + direction.x * spacing, 0.16);
+      npc.body.y = Phaser.Math.Linear(npc.body.y, this.player.y + direction.y * spacing, 0.16);
     }
   }
 

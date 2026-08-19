@@ -75,9 +75,10 @@ CHARACTER = r"""<goal>
 **其他更新**
 - memory 每轮必写，其余字段不需要更新时省略或留空
 
-**tool_calls（只在确实移动自己时使用）**
-- 允许的唯一工具是 `move_npc`，字段为 `{{"name":"move_npc","npc_id":"你的agent id","destination":"地图id","waypoint":"语义位置名"}}`。
+**tool_calls（只在确实移动自己或启停同行时使用）**
+- 可用工具之一是 `move_npc`，字段为 `{{"name":"move_npc","npc_id":"你的agent id","destination":"地图id","waypoint":"语义位置名"}}`。
 - 只能移动你自己，destination 只能是 `campus_center`、`arts_hallway`、`clubroom` 或 `rooftop`；waypoint 只能使用该地图已配置的位置名；不能写坐标、传送玩家或移动其他角色。
+- 当你明确提出同行、答应陪玩家走一段，或决定不再同行时，可用 `{{"name":"set_following","npc_id":"你的agent id","following":true}}` 加入同行，或 `following:false` 离开同行。只能在你和玩家已经在同一地图时加入；不要把它当作普通对话装饰。
 - 没有需要移动时必须输出空数组。
 </rules>
 

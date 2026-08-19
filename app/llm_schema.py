@@ -31,10 +31,11 @@ ChoiceText = Annotated[str, Field(max_length=MAX_CHOICE_CHARS)]
 class LLMToolCall(BaseModel):
     """允许角色请求的语义工具；执行层会再次校验调用者和目的地。"""
 
-    name: Literal["move_npc"]
+    name: Literal["move_npc", "set_following"]
     npc_id: str
-    destination: str
+    destination: str = ""
     waypoint: str = ""
+    following: bool = False
 
 
 class LLMCharacterOutput(BaseModel):

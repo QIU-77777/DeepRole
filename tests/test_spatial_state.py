@@ -1,6 +1,6 @@
 import pytest
 
-from models.spatial import StoryTime, SpatialState, advance_story_time, apply_npc_schedules, apply_story_environment, available_spatial_events, end_story_day, find_map_route, move_npc, transition_spatial_state, trigger_spatial_event
+from models.spatial import StoryTime, SpatialState, advance_story_time, apply_npc_schedules, apply_story_environment, available_spatial_events, end_story_day, find_map_route, move_npc, set_npc_following, transition_spatial_state, trigger_spatial_event
 import repository.spatial_state as spatial_state
 
 
@@ -67,6 +67,32 @@ def test_npc_move_uses_semantic_destination_only() -> None:
 def test_npc_move_rejects_unknown_npc() -> None:
     with pytest.raises(KeyError):
         move_npc(SpatialState(), npc_id="unknown", destination="rooftop")
+
+
+def test_follower_stays_with_player_across_map_transition() -> None:
+    state = SpatialState(
+        player={"map_id": "clubroom", "x": 400, "y": 400, "spawn_id": "clubroom_door"},
+        npc_locations={"linxi": "clubroom"},
+    )
+    following = set_npc_following(state, npc_id="linxi", following=True)
+    moved = transition_spatial_state(following, from_map="clubroom", exit_id="to_rooftop")
+
+    assert moved.active_followers == ["linxi"]
+    assert moved.npc_locations["linxi"] == "rooftop"
+    assert moved.npc_waypoints["linxi"] == "railing"
+
+
+def test_follower_requires_same_map_and_move_stops_following() -> None:
+    state = SpatialState(npc_locations={"linxi": "clubroom"})
+    with pytest.raises(ValueError):
+        set_npc_following(state, npc_id="linxi", following=True)
+
+    following = SpatialState(
+        active_followers=["linxi"],
+        npc_locations={"linxi": "campus_center"},
+    )
+    moved = move_npc(following, npc_id="linxi", destination="rooftop")
+    assert moved.active_followers == []
 
 
 def test_end_story_day_rolls_to_next_morning() -> None:

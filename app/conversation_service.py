@@ -24,7 +24,7 @@ from repository.history import load_conversation_history
 from repository.status_file import FileUpdateResult
 from repository.relationship_state import sync_relationship_from_status
 from repository.spatial_state import read_spatial_state, write_spatial_state
-from models.spatial import MapId, move_npc
+from models.spatial import MapId, move_npc, set_npc_following
 
 
 class ConversationService:
@@ -66,7 +66,7 @@ class ConversationService:
         valid_maps = {"campus_center", "arts_hallway", "clubroom", "rooftop"}
         results: list[dict] = []
         for call in tool_calls:
-            if call.name != "move_npc" or call.npc_id != agent_name:
+            if call.npc_id != agent_name:
                 routing_logger.warning(
                     "[%s] 拒绝越权空间工具调用: %s/%s",
                     agent_name,
@@ -74,6 +74,28 @@ class ConversationService:
                     call.npc_id,
                 )
                 results.append({"name": call.name, "ok": False, "reason": "only_self"})
+                continue
+            if call.name == "set_following":
+                state = read_spatial_state()
+                try:
+                    updated = set_npc_following(
+                        state,
+                        npc_id=agent_name,
+                        following=call.following,
+                    )
+                except ValueError:
+                    results.append({"name": call.name, "ok": False, "reason": "not_present"})
+                    continue
+                write_spatial_state(updated)
+                results.append({
+                    "name": call.name,
+                    "ok": True,
+                    "npc_id": agent_name,
+                    "following": call.following,
+                })
+                continue
+            if call.name != "move_npc":
+                results.append({"name": call.name, "ok": False, "reason": "unknown_tool"})
                 continue
             if call.destination not in valid_maps:
                 routing_logger.warning(

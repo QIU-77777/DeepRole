@@ -61,7 +61,7 @@ from repository.history import (
 from repository.message_router import message_router
 from repository.spatial_state import read_spatial_state, reset_spatial_state, update_player_snapshot, write_spatial_state
 from repository.relationship_state import read_relationship_state, rebuild_relationship_state, reset_relationship_state
-from models.spatial import MapId, SpatialState, advance_story_time, apply_npc_schedules, apply_story_environment, available_spatial_events, end_story_day, move_npc, trigger_spatial_event, transition_spatial_state
+from models.spatial import MapId, SpatialState, advance_story_time, apply_npc_schedules, apply_story_environment, available_spatial_events, end_story_day, move_npc, set_npc_following, trigger_spatial_event, transition_spatial_state
 
 
 def reset_entities() -> None:
@@ -484,6 +484,11 @@ class SpatialNpcMoveRequest(BaseModel):
     reason: str = ""
 
 
+class SpatialFollowerRequest(BaseModel):
+    npc_id: str
+    following: bool
+
+
 class SpatialEventTriggerRequest(BaseModel):
     event_id: str
 
@@ -529,6 +534,23 @@ async def api_spatial_npc_move(req: SpatialNpcMoveRequest) -> JSONResponse:
         return JSONResponse({"detail": "NPC waypoint 不存在。"}, status_code=400)
     except KeyError:
         return JSONResponse({"detail": "NPC 不存在或不允许由空间工具移动。"}, status_code=404)
+    return JSONResponse(_spatial_state_payload(write_spatial_state(updated)))
+
+
+@app.post("/api/spatial/follower")
+async def api_spatial_follower(req: SpatialFollowerRequest) -> JSONResponse:
+    """同行队列只接受角色 id 与启停状态，不能借此传送角色。"""
+    state = read_spatial_state()
+    try:
+        updated = set_npc_following(
+            state,
+            npc_id=req.npc_id,
+            following=req.following,
+        )
+    except ValueError:
+        return JSONResponse({"detail": "角色必须在当前场景才能同行。"}, status_code=409)
+    except KeyError:
+        return JSONResponse({"detail": "角色不存在或不能同行。"}, status_code=404)
     return JSONResponse(_spatial_state_payload(write_spatial_state(updated)))
 
 

@@ -131,6 +131,9 @@ def apply_npc_schedules(state: SpatialState) -> SpatialState:
     """按故事时间投影主要 NPC 的离屏位置。"""
     locations = dict(state.npc_locations)
     for npc_id in SPATIAL_NPC_IDS:
+        if npc_id in state.active_followers:
+            locations[npc_id] = state.player.map_id
+            continue
         location = state.npc_overrides.get(
             npc_id,
             scheduled_npc_map(npc_id, state.story_time),
@@ -138,6 +141,9 @@ def apply_npc_schedules(state: SpatialState) -> SpatialState:
         locations[npc_id] = location
     waypoints = dict(state.npc_waypoints)
     for npc_id in SPATIAL_NPC_IDS:
+        if npc_id in state.active_followers:
+            waypoints[npc_id] = SPATIAL_WAYPOINTS[state.player.map_id][0]
+            continue
         if npc_id in state.npc_overrides:
             if waypoints.get(npc_id) not in SPATIAL_WAYPOINTS[locations[npc_id]]:
                 waypoints[npc_id] = SPATIAL_WAYPOINTS[locations[npc_id]][0]
@@ -266,11 +272,24 @@ def move_npc(state: SpatialState, *, npc_id: str, destination: MapId, waypoint: 
     routes = dict(state.npc_routes)
     routes[npc_id] = route
     return state.model_copy(update={
+        "active_followers": [follower for follower in state.active_followers if follower != npc_id],
         "npc_locations": locations,
         "npc_overrides": overrides,
         "npc_routes": routes,
         "npc_waypoints": {**state.npc_waypoints, npc_id: selected_waypoint},
     })
+
+
+def set_npc_following(state: SpatialState, *, npc_id: str, following: bool) -> SpatialState:
+    """让在场主要角色加入或离开同行队列，不接受坐标或跨图传送。"""
+    if npc_id not in SPATIAL_NPC_IDS:
+        raise KeyError(npc_id)
+    followers = [follower for follower in state.active_followers if follower != npc_id]
+    if not following:
+        return state.model_copy(update={"active_followers": followers})
+    if state.npc_locations.get(npc_id) != state.player.map_id:
+        raise ValueError("NPC 必须与玩家处于同一地图才能同行")
+    return state.model_copy(update={"active_followers": [*followers, npc_id]})
 
 
 def end_story_day(state: SpatialState) -> SpatialState:
@@ -289,6 +308,7 @@ def end_story_day(state: SpatialState) -> SpatialState:
         }),
         "npc_overrides": {},
         "npc_routes": {},
+        "active_followers": [],
         "npc_waypoints": {},
     })
     return apply_story_environment(apply_npc_schedules(updated))
