@@ -44,6 +44,7 @@ CHARACTER = r"""<goal>
   "status": {{"字段": "内容"}},
   "triggered": ["打算名称"],
   "add_event": ["【打算名称】描述"],
+  "tool_calls": []
 }}
 </format>
 
@@ -73,6 +74,12 @@ CHARACTER = r"""<goal>
 
 **其他更新**
 - memory 每轮必写，其余字段不需要更新时省略或留空
+
+**tool_calls（只在确实移动自己或启停同行时使用）**
+- 可用工具之一是 `move_npc`，字段为 `{{"name":"move_npc","npc_id":"你的agent id","destination":"地图id","waypoint":"语义位置名"}}`。
+- 只能移动你自己，destination 只能是 `campus_center`、`arts_hallway`、`clubroom` 或 `rooftop`；waypoint 只能使用该地图已配置的位置名；不能写坐标、传送玩家或移动其他角色。
+- 当你明确提出同行、答应陪玩家走一段，或决定不再同行时，可用 `{{"name":"set_following","npc_id":"你的agent id","following":true}}` 加入同行，或 `following:false` 离开同行。只能在你和玩家已经在同一地图时加入；不要把它当作普通对话装饰。
+- 没有需要移动时必须输出空数组。
 </rules>
 
 <fields>
@@ -153,6 +160,7 @@ Return the result in this exact JSON format:
     "角色显示名": "位置/站位/简短状态"
   }},
   "scene_description": "一两句环境、气氛或转场描写",
+  "display_text": "可选的一句玩家可直接看到的旁白；没有时留空",
   "character_locations": {{
     "玩家显示名": "此刻在哪里或在做什么",
     "角色显示名": "此刻在哪里或在做什么"

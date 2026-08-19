@@ -1,0 +1,50 @@
+{
+  "type": "map",
+  "version": "1.10",
+  "tiledversion": "1.10.2",
+  "orientation": "orthogonal",
+  "renderorder": "right-down",
+  "width": 32,
+  "height": 20,
+  "tilewidth": 32,
+  "tileheight": 32,
+  "layers": [
+    {"id": 1, "name": "walls", "type": "objectgroup", "objects": [
+      {"id": 1, "x": 0, "y": 0, "width": 1024, "height": 32},
+      {"id": 2, "x": 0, "y": 608, "width": 1024, "height": 32},
+      {"id": 3, "x": 0, "y": 0, "width": 32, "height": 640},
+      {"id": 4, "x": 992, "y": 0, "width": 32, "height": 640},
+      {"id": 5, "x": 320, "y": 160, "width": 384, "height": 32},
+      {"id": 6, "x": 320, "y": 448, "width": 384, "height": 32}
+    ]},
+    {"id": 2, "name": "exits", "type": "objectgroup", "objects": [
+      {"id": 7, "name": "to_arts_hallway", "x": 960, "y": 256, "width": 64, "height": 128, "properties": [
+        {"name": "target", "type": "string", "value": "arts_hallway"},
+        {"name": "spawn_x", "type": "int", "value": 2}, {"name": "spawn_y", "type": "int", "value": 10},
+        {"name": "minutes", "type": "int", "value": 10}
+      ]},
+      {"id": 8, "name": "to_dorm", "x": 448, "y": 576, "width": 128, "height": 64, "properties": [
+        {"name": "target", "type": "string", "value": "campus_center"},
+        {"name": "spawn_x", "type": "int", "value": 16}, {"name": "spawn_y", "type": "int", "value": 17},
+        {"name": "minutes", "type": "int", "value": 0}, {"name": "end_day", "type": "bool", "value": true}
+      ]}
+    ]},
+    {"id": 3, "name": "waypoints", "type": "objectgroup", "objects": [
+      {"id": 9, "name": "fountain", "type": "waypoint", "x": 256, "y": 288},
+      {"id": 10, "name": "dorm_exit", "type": "waypoint", "x": 512, "y": 544}
+    ]},
+    {"id": 4, "name": "npcs", "type": "objectgroup", "objects": [
+      {"id": 11, "name": "ambient_student", "x": 256, "y": 288, "width": 24, "height": 30, "properties": [
+        {"name": "label", "type": "string", "value": "路过的学生"}, {"name": "color", "type": "string", "value": "#91b6a1"},
+        {"name": "interaction", "type": "string", "value": "环境气泡"}, {"name": "kind", "type": "string", "value": "ambient"},
+        {"name": "bubble", "type": "string", "value": "公告栏上贴着新的演出海报，边角还没压平。"}
+      ]}
+    ]}
+  ],
+  "properties": [
+    {"name": "map_id", "type": "string", "value": "campus_center"},
+    {"name": "label", "type": "string", "value": "校园中心"},
+    {"name": "background", "type": "color", "value": "#789b7e"},
+    {"name": "spawn_x", "type": "int", "value": 5}, {"name": "spawn_y", "type": "int", "value": 10}
+  ]
+}

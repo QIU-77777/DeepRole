@@ -167,6 +167,8 @@ async def test_export_new_save_uses_fresh_slot_filename(tmp_path: Path, monkeypa
     (characters_dir / ".story_id").write_text("school", encoding="utf-8")
     (characters_dir / ".turn_counter.json").write_text('{"turn": 3}', encoding="utf-8")
     (characters_dir / PLAYER_NAME_FILENAME).write_text("北原悠", encoding="utf-8")
+    (characters_dir / "spatial_state.json").write_text('{"schema_version": 1}', encoding="utf-8")
+    (characters_dir / "relationship_state.json").write_text('{"schema_version": 1}', encoding="utf-8")
     (narrator_dir / "soul.md").write_text("# narrator\n", encoding="utf-8")
     (narrator_dir / "status.md").write_text("## 叙事焦点\n屋顶\n", encoding="utf-8")
 
@@ -199,6 +201,8 @@ async def test_export_new_save_uses_fresh_slot_filename(tmp_path: Path, monkeypa
         assert metadata["title"] == "屋顶"
         assert zf.read(".save_id").decode("utf-8") == metadata["save_id"]
         assert zf.read(PLAYER_NAME_FILENAME).decode("utf-8") == "北原悠"
+        assert zf.read("spatial_state.json").decode("utf-8") == '{"schema_version": 1}'
+        assert zf.read("relationship_state.json").decode("utf-8") == '{"schema_version": 1}'
 
     assert (characters_dir / ".save_id").read_text(encoding="utf-8") == metadata[
         "save_id"

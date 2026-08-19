@@ -818,7 +818,13 @@ async def export_save_archive_with_detail() -> tuple[str | None, str | None]:
             zf.writestr(".save_id", save_id)
             print(f"[存档] 已添加: .save_id")
 
-            for marker in [".story_id", ".turn_counter.json", PLAYER_NAME_FILENAME]:
+            for marker in [
+                ".story_id",
+                ".turn_counter.json",
+                PLAYER_NAME_FILENAME,
+                "spatial_state.json",
+                "relationship_state.json",
+            ]:
                 marker_path = CHARACTERS_DIR / marker
                 if marker_path.exists():
                     zf.write(str(marker_path), marker)

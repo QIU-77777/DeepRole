@@ -7,16 +7,18 @@ load_dotenv()
 
 import asyncio
 import json
+import math
 import re
 import traceback
+import uuid
 from functools import lru_cache
 from pathlib import Path
 
 
-from fastapi import FastAPI
-from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from app.agent_factory import initialize_conversation_agents, reload_conversation_agent
 from app.consolidation.flow import memory_consolidation_flow
@@ -25,6 +27,7 @@ from app.conversation_flow import (
     bootstrap_new_characters,
     generate_choices,
     run_agent_in_scene,
+    run_silent_listener,
 )
 from app.memory.indexer import rebuild_memory_index, rebuild_understanding_index
 from repository.character_repo import character_repo
@@ -56,6 +59,9 @@ from repository.history import (
     search_history,
 )
 from repository.message_router import message_router
+from repository.spatial_state import read_spatial_state, reset_spatial_state, update_player_snapshot, write_spatial_state
+from repository.relationship_state import read_relationship_state, rebuild_relationship_state, reset_relationship_state
+from models.spatial import MapId, SpatialState, advance_story_time, apply_npc_schedules, apply_story_environment, available_spatial_events, end_story_day, move_npc, set_npc_following, trigger_spatial_event, transition_spatial_state
 
 
 def reset_entities() -> None:
@@ -66,6 +72,7 @@ def reset_entities() -> None:
 app = FastAPI(title="DeepRole")
 
 STATIC_DIR = Path(__file__).parent / "static"
+SPATIAL_DIST_DIR = Path(__file__).parent / "spatial_client" / "dist"
 _LAST_CHOICES_FILE = CHARACTERS_DIR / "last_choices.json"
 _pending_state_update_task: asyncio.Task[None] | None = None
 _pending_state_update_requested = False
@@ -416,6 +423,164 @@ async def index() -> HTMLResponse:
     return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
 
 
+@app.get("/game", response_class=HTMLResponse)
+async def spatial_game() -> HTMLResponse:
+    """空间化客户端入口；旧聊天入口 / 保持不变。"""
+    index_path = SPATIAL_DIST_DIR / "index.html"
+    if not index_path.exists():
+        return HTMLResponse(
+            "<h1>空间客户端尚未构建</h1><p>进入 spatial_client 后运行 npm install && npm run build。</p>",
+            status_code=503,
+        )
+    return HTMLResponse(content=index_path.read_text(encoding="utf-8"))
+
+
+@app.get("/game/{asset_path:path}")
+async def spatial_asset(asset_path: str):
+    """为 Vite 构建产物提供同源静态资源与 SPA fallback。"""
+    index_path = SPATIAL_DIST_DIR / "index.html"
+    if not index_path.exists():
+        return JSONResponse({"detail": "空间客户端尚未构建。"}, status_code=503)
+    candidate = (SPATIAL_DIST_DIR / asset_path).resolve()
+    try:
+        candidate.relative_to(SPATIAL_DIST_DIR.resolve())
+    except ValueError:
+        return JSONResponse({"detail": "非法资源路径。"}, status_code=404)
+    if candidate.is_file():
+        return FileResponse(candidate)
+    return FileResponse(index_path)
+
+
+def _spatial_state_payload(state: SpatialState) -> dict:
+    payload = state.model_dump()
+    payload["story_time"]["display"] = state.story_time.display
+    payload["day_phase"] = state.day_phase
+    payload["available_events"] = [event.model_dump() for event in available_spatial_events(state)]
+    return payload
+
+
+class SpatialSnapshotRequest(BaseModel):
+    map_id: MapId
+    x: float
+    y: float
+
+    @field_validator("x", "y")
+    @classmethod
+    def _ensure_finite(cls, value: float) -> float:
+        if not math.isfinite(value):
+            raise ValueError("坐标必须是有限数字。")
+        return value
+
+
+class SpatialTransitionRequest(BaseModel):
+    from_map: MapId
+    exit_id: str
+
+
+class SpatialNpcMoveRequest(BaseModel):
+    npc_id: str
+    destination: MapId
+    waypoint: str = ""
+    reason: str = ""
+
+
+class SpatialFollowerRequest(BaseModel):
+    npc_id: str
+    following: bool
+
+
+class SpatialEventTriggerRequest(BaseModel):
+    event_id: str
+
+
+@app.get("/api/spatial/state")
+async def api_spatial_state() -> JSONResponse:
+    return JSONResponse(_spatial_state_payload(read_spatial_state()))
+
+
+@app.post("/api/spatial/snapshot")
+async def api_spatial_snapshot(req: SpatialSnapshotRequest) -> JSONResponse:
+    current = read_spatial_state()
+    if current.player.map_id != req.map_id:
+        return JSONResponse({"detail": "地图必须通过有效出口转换。"}, status_code=409)
+    state = update_player_snapshot(map_id=req.map_id, x=req.x, y=req.y)
+    return JSONResponse(_spatial_state_payload(state))
+
+
+@app.post("/api/spatial/transition")
+async def api_spatial_transition(req: SpatialTransitionRequest) -> JSONResponse:
+    state = read_spatial_state()
+    try:
+        updated = transition_spatial_state(state, from_map=req.from_map, exit_id=req.exit_id)
+    except ValueError:
+        return JSONResponse({"detail": "当前地图与请求不一致。"}, status_code=409)
+    except KeyError:
+        return JSONResponse({"detail": "出口不存在或不可用。"}, status_code=404)
+    return JSONResponse(_spatial_state_payload(write_spatial_state(updated)))
+
+
+@app.post("/api/spatial/npc/move")
+async def api_spatial_npc_move(req: SpatialNpcMoveRequest) -> JSONResponse:
+    """语义 NPC 移动工具边界：调用方只能给角色和目的地，不能写坐标。"""
+    state = read_spatial_state()
+    try:
+        updated = move_npc(
+            state,
+            npc_id=req.npc_id,
+            destination=req.destination,
+            waypoint=req.waypoint,
+        )
+    except ValueError:
+        return JSONResponse({"detail": "NPC waypoint 不存在。"}, status_code=400)
+    except KeyError:
+        return JSONResponse({"detail": "NPC 不存在或不允许由空间工具移动。"}, status_code=404)
+    return JSONResponse(_spatial_state_payload(write_spatial_state(updated)))
+
+
+@app.post("/api/spatial/follower")
+async def api_spatial_follower(req: SpatialFollowerRequest) -> JSONResponse:
+    """同行队列只接受角色 id 与启停状态，不能借此传送角色。"""
+    state = read_spatial_state()
+    try:
+        updated = set_npc_following(
+            state,
+            npc_id=req.npc_id,
+            following=req.following,
+        )
+    except ValueError:
+        return JSONResponse({"detail": "角色必须在当前场景才能同行。"}, status_code=409)
+    except KeyError:
+        return JSONResponse({"detail": "角色不存在或不能同行。"}, status_code=404)
+    return JSONResponse(_spatial_state_payload(write_spatial_state(updated)))
+
+
+@app.post("/api/spatial/end-day")
+async def api_spatial_end_day() -> JSONResponse:
+    """通过返回宿舍出口结束叙事日，不读取宿主机时间。"""
+    state = read_spatial_state()
+    if state.player.map_id != "campus_center":
+        return JSONResponse({"detail": "必须从校园中心返回宿舍。"}, status_code=409)
+    return JSONResponse(_spatial_state_payload(write_spatial_state(end_story_day(state))))
+
+
+@app.post("/api/spatial/event/trigger")
+async def api_spatial_event_trigger(req: SpatialEventTriggerRequest) -> JSONResponse:
+    state = read_spatial_state()
+    try:
+        updated = trigger_spatial_event(state, req.event_id)
+    except KeyError:
+        return JSONResponse({"detail": "事件尚未满足触发条件或已触发。"}, status_code=409)
+    return JSONResponse(_spatial_state_payload(write_spatial_state(updated)))
+
+
+@app.get("/api/relationships")
+async def api_relationships() -> JSONResponse:
+    state = read_relationship_state()
+    if not state.characters:
+        state = rebuild_relationship_state(get_agent_names(include_narrator=False))
+    return JSONResponse(state.model_dump())
+
+
 # =============================================================================
 # /api/init
 # =============================================================================
@@ -549,6 +714,8 @@ async def api_new_game(req: NewGameRequest) -> JSONResponse:
     _invalidate_pending_choices(clear_saved=True)
     await _settle_pending_state_update(cancel=True)
     intro_text, opening_text = await reset_game(req.story_id)
+    reset_spatial_state()
+    rebuild_relationship_state(get_agent_names(include_narrator=False))
     reset_entities()
     for name in get_agent_names(include_narrator=True):
         reload_conversation_agent(name)
@@ -574,14 +741,64 @@ async def api_new_game(req: NewGameRequest) -> JSONResponse:
 # =============================================================================
 
 
+class SpatialChatContext(BaseModel):
+    """客户端空间交互上下文；它限制听众，不改变空间状态。"""
+
+    map_id: MapId
+    primary_target: str
+    visible_to: list[str] = []
+
+
 class ChatRequest(BaseModel):
     message: str
+    spatial: SpatialChatContext | None = None
 
 
-async def _chat_stream(user_input: str):
+_SPATIAL_MAP_LABELS = {
+    "campus_center": "校园中心",
+    "arts_hallway": "艺术楼走廊",
+    "clubroom": "剧社活动室",
+    "rooftop": "天台",
+}
+
+
+def _prepare_spatial_context(context: SpatialChatContext) -> tuple[str, list[str], str]:
+    valid_agents = set(get_agent_names(include_narrator=False))
+    if context.primary_target not in valid_agents:
+        raise HTTPException(status_code=400, detail="主要交谈对象不存在。")
+
+    spatial_state = read_spatial_state()
+    if spatial_state.npc_locations.get(context.primary_target) != context.map_id:
+        raise HTTPException(status_code=409, detail="主要交谈对象当前不在这个区域。")
+    scene_agents = {
+        name for name, map_id in spatial_state.npc_locations.items() if map_id == context.map_id
+    }
+    audience = [
+        name
+        for name in dict.fromkeys(context.visible_to + [context.primary_target])
+        if name in valid_agents and name in scene_agents
+    ]
+    if context.primary_target not in audience:
+        audience.insert(0, context.primary_target)
+    audience = list(dict.fromkeys(audience))
+    prompt = (
+        f"当前地图：{_SPATIAL_MAP_LABELS[context.map_id]}（{context.map_id}）\n"
+        f"当前主要交谈对象：{context.primary_target}\n"
+        f"当前可听见公开对话的主要角色：{', '.join(audience) or '无'}\n"
+        "空间客户端负责玩家移动和角色在场判定；你只负责叙事路由与回应。"
+    )
+    return prompt, audience, context.primary_target
+
+
+async def _chat_stream(
+    user_input: str,
+    *,
+    spatial_context: tuple[str, list[str], str] | None = None,
+):
     """核心游戏循环，通过 SSE 逐步推送结果。"""
     global _pending_choices_task
     choices_token = _invalidate_pending_choices(clear_saved=True)
+    interaction_id = uuid.uuid4().hex if spatial_context is not None else None
     # 0 = 哨兵：本轮还没有 narrator 成功发言，不触发 consolidation
     current_turn = 0
 
@@ -593,9 +810,25 @@ async def _chat_stream(user_input: str):
             routing_logger.warning("state_updater 超时（>60s），done 事件提前发出")
 
     # 1. narrator 路由
-    narrator_output, is_narrator_valid = await narrator_service.route(user_input)
+    spatial_prompt, spatial_audience, primary_target = spatial_context or ("", [], "")
+    is_spatial = spatial_context is not None
+    if is_spatial:
+        narrator_output, is_narrator_valid = await narrator_service.route(
+            user_input,
+            spatial_context=spatial_prompt,
+            persist_scene=False,
+        )
+    else:
+        # Keep the legacy call shape intact for the parallel chat client and its integrations.
+        narrator_output, is_narrator_valid = await narrator_service.route(user_input)
     targets = narrator_output.targets if narrator_output is not None else []
     new_character_specs = narrator_output.new_characters if narrator_output is not None else []
+
+    if is_spatial:
+        # 空间交互不孵化新 NPC；主要交谈对象必须优先回应，最多再追加一名在场角色。
+        new_character_specs = []
+        routed = [name for name in targets if name in spatial_audience and name != primary_target]
+        targets = [primary_target] + routed[:1] if is_narrator_valid else []
 
     # 1.5 处理 narrator 请求的新角色（孵化成功后加入 targets）
     targets, created_new_characters = await bootstrap_new_characters(
@@ -620,13 +853,27 @@ async def _chat_stream(user_input: str):
     # 旁白失败时不把玩家消息写进 raw，避免下一轮上下文里残留没人回应的玩家话语。
     narrator_dump = narrator_output.model_dump() if narrator_output is not None else None
     if is_narrator_valid:
-        await message_router.broadcast_player_message(targets, user_input)
-        current_turn = await message_router.broadcast_narrator_output(targets, narrator_dump)
+        if is_spatial:
+            await message_router.broadcast_player_message(
+                targets,
+                user_input,
+                visible_to=spatial_audience,
+                interaction_id=interaction_id,
+            )
+            current_turn = await message_router.broadcast_narrator_output(
+                targets,
+                narrator_dump,
+                visible_to=spatial_audience,
+                interaction_id=interaction_id,
+            )
+        else:
+            await message_router.broadcast_player_message(targets, user_input)
+            current_turn = await message_router.broadcast_narrator_output(targets, narrator_dump)
     if narrator_dump is not None:
         yield _sse_event(
             "narrator",
             {
-                "content": narrator_output.scene_description,
+                "content": narrator_output.display_text or narrator_output.scene_description,
                 "author": "旁白",
                 "payload": narrator_dump,
             },
@@ -644,11 +891,16 @@ async def _chat_stream(user_input: str):
     agent_responses: list[tuple[str, str]] = []
     for agent_name in targets:
         try:
-            response = await run_agent_in_scene(
-                agent_name,
-                targets,
-                user_input,
-            )
+            if is_spatial:
+                response = await run_agent_in_scene(
+                    agent_name,
+                    targets,
+                    user_input,
+                    visible_to=spatial_audience,
+                    interaction_id=interaction_id,
+                )
+            else:
+                response = await run_agent_in_scene(agent_name, targets, user_input)
             if response:
                 agent_responses.append((agent_name, response))
                 yield _sse_event(
@@ -661,6 +913,21 @@ async def _chat_stream(user_input: str):
                 "agent",
                 {"content": f"（{_get_agent_display_name(agent_name)}暂时无法回应，请稍后再试）", "author": _get_agent_display_name(agent_name)},
             )
+
+    if is_spatial:
+        silent_listeners = [name for name in spatial_audience if name not in targets]
+        if silent_listeners:
+            await asyncio.gather(
+                *(run_silent_listener(name, user_input) for name in silent_listeners)
+            )
+
+    if is_spatial and agent_responses:
+        spatial_state = read_spatial_state()
+        spatial_state = spatial_state.model_copy(update={
+            "story_time": advance_story_time(spatial_state.story_time, 5),
+        })
+        spatial_state = write_spatial_state(apply_story_environment(apply_npc_schedules(spatial_state)))
+        yield _sse_event("spatial_state", _spatial_state_payload(spatial_state))
 
     choices_task: asyncio.Task[list[str]] | None = None
     if agent_responses and choices_token == _choices_generation_token:
@@ -696,8 +963,9 @@ async def _chat_stream(user_input: str):
 
 @app.post("/api/chat")
 async def api_chat(req: ChatRequest) -> StreamingResponse:
+    spatial_context = _prepare_spatial_context(req.spatial) if req.spatial else None
     return StreamingResponse(
-        _chat_stream(req.message),
+        _chat_stream(req.message, spatial_context=spatial_context),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
@@ -887,6 +1155,8 @@ async def api_reset(req: ResetRequest) -> JSONResponse:
     _invalidate_pending_choices(clear_saved=True)
     await _settle_pending_state_update(cancel=True)
     intro_text, opening_text = await reset_game(req.story_id)
+    reset_spatial_state()
+    rebuild_relationship_state(get_agent_names(include_narrator=False))
     reset_entities()
     for name in get_agent_names(include_narrator=True):
         reload_conversation_agent(name)

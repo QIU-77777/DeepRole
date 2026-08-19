@@ -8,6 +8,7 @@ from app.agent_factory import get_choices_agent
 from repository.sdk_runner import run_structured_agent
 from app.llm_schema import LLMChoices, LLMNarratorOutput, LLMNewCharacterRequest
 from app.conversation_service import conversation_service
+from app.conversation_service import ConversationService
 from app.character_factory import CreatedCharacterInfo, create_character
 from repository.character_repo import character_repo
 from app.prompt_builder import build_history_transcript
@@ -81,13 +82,38 @@ async def run_agent_in_scene(
     agent_name: str,
     targets: list[str],
     user_input: str,
+    *,
+    visible_to: list[str] | None = None,
+    interaction_id: str | None = None,
 ) -> str | None:
     """在场景上下文中运行单个角色并广播响应。"""
     from repository.message_router import message_router
 
     character = character_repo.load(agent_name)
     output = await conversation_service.run_turn(character, user_input)
+    tool_results = conversation_service.consume_tool_results()
     response = clean_response(output.content)
     if is_valid_response(response, agent_name):
-        await message_router.broadcast_agent_response(agent_name, targets, response)
+        await message_router.broadcast_agent_response(
+            agent_name,
+            targets,
+            response,
+            visible_to=visible_to,
+            interaction_id=interaction_id,
+        )
+    for result in tool_results:
+        await message_router.broadcast_tool_result(
+            targets,
+            result,
+            visible_to=visible_to,
+            interaction_id=interaction_id,
+        )
     return response
+
+
+async def run_silent_listener(agent_name: str, user_input: str) -> None:
+    """让同场但未被路由为发言者的角色吸收本轮可见内容。"""
+    listener_service = ConversationService()
+    character = character_repo.load(agent_name)
+    await listener_service.run_turn(character, user_input)
+    listener_service.consume_tool_results()

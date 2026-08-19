@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="768" height="512" viewBox="0 0 768 512" shape-rendering="crispEdges">
+  <defs>
+    <pattern id="floor" width="32" height="32" patternUnits="userSpaceOnUse"><rect width="32" height="32" fill="#b99878"/><path d="M0 2h32M0 30h32" stroke="#dec8a6" stroke-width="2" opacity=".4"/></pattern>
+  </defs>
+  <rect width="768" height="512" fill="#4c5c5b"/>
+  <rect x="32" y="32" width="704" height="448" fill="url(#floor)"/>
+  <rect x="32" y="32" width="704" height="64" fill="#65756e"/>
+  <rect x="32" y="32" width="704" height="8" fill="#a7b59b"/>
+  <rect x="32" y="416" width="704" height="64" fill="#5e6d66"/>
+  <rect x="32" y="472" width="704" height="8" fill="#9dae92"/>
+
+  <!-- two inner walls have a central open approach to the clubroom door -->
+  <rect x="224" y="32" width="32" height="224" fill="#40514e"/><rect x="224" y="32" width="8" height="224" fill="#91a38d"/>
+  <rect x="224" y="384" width="32" height="96" fill="#40514e"/><rect x="224" y="384" width="8" height="96" fill="#91a38d"/>
+  <rect x="512" y="32" width="32" height="224" fill="#40514e"/><rect x="512" y="32" width="8" height="224" fill="#91a38d"/>
+  <rect x="512" y="384" width="32" height="96" fill="#40514e"/><rect x="512" y="384" width="8" height="96" fill="#91a38d"/>
+  <rect x="256" y="32" width="128" height="64" fill="#543d35"/><rect x="266" y="39" width="108" height="48" fill="#d2b783"/><path d="M320 39v48" stroke="#7c5a42" stroke-width="4"/>
+
+  <!-- lockers, poster gallery and warm lamps -->
+  <g fill="#394a54" stroke="#b0c0b6" stroke-width="2"><rect x="80" y="156" width="28" height="92"/><rect x="116" y="156" width="28" height="92"/><rect x="584" y="156" width="28" height="92"/><rect x="620" y="156" width="28" height="92"/></g>
+  <g fill="#d9c58d"><circle cx="94" cy="202" r="3"/><circle cx="130" cy="202" r="3"/><circle cx="598" cy="202" r="3"/><circle cx="634" cy="202" r="3"/></g>
+  <rect x="336" y="238" width="96" height="94" fill="#5d4334"/><rect x="346" y="248" width="76" height="66" fill="#eee0ae"/><path d="M354 260h60m-60 14h44m-44 14h55" stroke="#b26356" stroke-width="4"/>
+  <g fill="#f0d494"><rect x="156" y="52" width="24" height="10"/><rect x="588" y="52" width="24" height="10"/><rect x="156" y="450" width="24" height="10"/><rect x="588" y="450" width="24" height="10"/></g>
+  <path d="M258 346h252" stroke="#8b6a55" stroke-width="8" opacity=".55"/>
+</svg>

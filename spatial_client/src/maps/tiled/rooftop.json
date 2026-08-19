@@ -1,0 +1,38 @@
+{
+  "type": "map",
+  "version": "1.10",
+  "tiledversion": "1.10.2",
+  "orientation": "orthogonal",
+  "renderorder": "right-down",
+  "width": 18,
+  "height": 14,
+  "tilewidth": 32,
+  "tileheight": 32,
+  "layers": [
+    {"id": 1, "name": "walls", "type": "objectgroup", "objects": [
+      {"id": 1, "x": 0, "y": 0, "width": 576, "height": 32},
+      {"id": 2, "x": 0, "y": 416, "width": 576, "height": 32},
+      {"id": 3, "x": 0, "y": 0, "width": 32, "height": 448},
+      {"id": 4, "x": 544, "y": 0, "width": 32, "height": 448},
+      {"id": 5, "x": 160, "y": 128, "width": 256, "height": 32},
+      {"id": 6, "x": 160, "y": 288, "width": 256, "height": 32}
+    ]},
+    {"id": 2, "name": "exits", "type": "objectgroup", "objects": [
+      {"id": 7, "name": "to_clubroom", "x": 0, "y": 192, "width": 64, "height": 96, "properties": [
+        {"name": "target", "type": "string", "value": "clubroom"}, {"name": "spawn_x", "type": "int", "value": 16},
+        {"name": "spawn_y", "type": "int", "value": 6}, {"name": "minutes", "type": "int", "value": 5}
+      ]}
+    ]},
+    {"id": 3, "name": "waypoints", "type": "objectgroup", "objects": [
+      {"id": 8, "name": "railing", "type": "waypoint", "x": 256, "y": 192},
+      {"id": 9, "name": "stairs", "type": "waypoint", "x": 64, "y": 224}
+    ]},
+    {"id": 4, "name": "npcs", "type": "objectgroup", "objects": []}
+  ],
+  "properties": [
+    {"name": "map_id", "type": "string", "value": "rooftop"},
+    {"name": "label", "type": "string", "value": "天台"},
+    {"name": "background", "type": "color", "value": "#6c8792"},
+    {"name": "spawn_x", "type": "int", "value": 2}, {"name": "spawn_y", "type": "int", "value": 7}
+  ]
+}

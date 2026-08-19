@@ -19,6 +19,8 @@ class MessageRouter:
         message: dict,
         *,
         turn: int | None = None,
+        visible_to: list[str] | None = None,
+        interaction_id: str | None = None,
     ) -> int:
         """只写入 narrator 的 jsonl（单一数据源）。
 
@@ -26,7 +28,7 @@ class MessageRouter:
         `consolidate_agent` 按 turn 切片。narrator 发言会开启新 turn；之后的角色
         回应与下一次玩家输入继续沿用该 turn，直到下一条 narrator 发言。
         """
-        visible = targets.copy()
+        visible = (visible_to if visible_to is not None else targets).copy()
         if "narrator" not in visible:
             visible.append("narrator")
         visible = list(dict.fromkeys(visible))
@@ -34,6 +36,8 @@ class MessageRouter:
         assigned_turn = read_turn_counter() if turn is None else int(turn)
         message["visible_to"] = visible
         message["turn"] = assigned_turn
+        if interaction_id:
+            message["interaction_id"] = interaction_id
         await append_message(message)
         return assigned_turn
 
@@ -41,6 +45,9 @@ class MessageRouter:
         self,
         targets: list[str],
         content: str,
+        *,
+        visible_to: list[str] | None = None,
+        interaction_id: str | None = None,
     ) -> int:
         turn = read_turn_counter()
         player_name = read_player_name()
@@ -55,6 +62,8 @@ class MessageRouter:
                 "content": raw_content,
             },
             turn=turn,
+            visible_to=visible_to,
+            interaction_id=interaction_id,
         )
 
     async def broadcast_agent_response(
@@ -62,24 +71,54 @@ class MessageRouter:
         agent_name: str,
         targets: list[str],
         content: str,
+        *,
+        visible_to: list[str] | None = None,
+        interaction_id: str | None = None,
     ) -> int:
         turn = increment_turn_counter() if agent_name == "narrator" else None
         return await self._broadcast_message(
             targets,
             {"role": agent_name, "content": content},
             turn=turn,
+            visible_to=visible_to,
+            interaction_id=interaction_id,
         )
 
     async def broadcast_narrator_output(
         self,
         targets: list[str],
         output: dict,
+        *,
+        visible_to: list[str] | None = None,
+        interaction_id: str | None = None,
     ) -> int:
         """Broadcast structured narrator output as raw history fields."""
         turn = increment_turn_counter()
         message = dict(output)
         message["role"] = "narrator"
-        return await self._broadcast_message(targets, message, turn=turn)
+        return await self._broadcast_message(
+            targets,
+            message,
+            turn=turn,
+            visible_to=visible_to,
+            interaction_id=interaction_id,
+        )
+
+    async def broadcast_tool_result(
+        self,
+        targets: list[str],
+        result: dict,
+        *,
+        visible_to: list[str] | None = None,
+        interaction_id: str | None = None,
+    ) -> int:
+        """写入语义工具结果，不递增 narrator turn。"""
+        return await self._broadcast_message(
+            targets,
+            {"role": "tool", "tool_result": dict(result)},
+            visible_to=visible_to,
+            interaction_id=interaction_id,
+        )
 
 
 message_router = MessageRouter()

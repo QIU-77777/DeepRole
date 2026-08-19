@@ -4,14 +4,17 @@
 实体（Character）只承载 name + soul；I/O 走 CharacterRepository。
 """
 
+from typing import cast
+
 from app.agent_factory import get_conversation_agent
-from app.llm_schema import LLMCharacterOutput
+from app.llm_schema import LLMCharacterOutput, LLMToolCall
 from repository.sdk_runner import run_app_agent
 from app.memory_query_builder import build_retrieval_queries
 from app.prompt_builder import build_user_message
 from repository.llm.config import get_llm_config
 from repository.llm.embedding import embed_sync
 from repository.log_config.routing import log_file_updates
+from repository.log_config.routing import routing_logger
 from app.memory.retrieval import search_memories, search_understandings
 from models import Character, status_fields
 from repository.config import HISTORY_RAW_SCAN_TURNS
@@ -19,10 +22,16 @@ from repository import intent_queue
 from repository.character_repo import character_repo
 from repository.history import load_conversation_history
 from repository.status_file import FileUpdateResult
+from repository.relationship_state import sync_relationship_from_status
+from repository.spatial_state import read_spatial_state, write_spatial_state
+from models.spatial import MapId, move_npc, set_npc_following
 
 
 class ConversationService:
     """单个角色的一次对话编排。无状态，直接调用 CharacterRepository 单例。"""
+
+    def __init__(self) -> None:
+        self._last_tool_results: list[dict] = []
 
     async def run_turn(
         self,
@@ -44,8 +53,85 @@ class ConversationService:
             usage_agent=character.name,
             model_name=config["model_id"],
         )
+        self._last_tool_results = self._apply_tool_calls(character.name, output.tool_calls)
         self._apply_updates(character.name, output)
         return output
+
+    def consume_tool_results(self) -> list[dict]:
+        results, self._last_tool_results = self._last_tool_results, []
+        return results
+
+    def _apply_tool_calls(self, agent_name: str, tool_calls: list[LLMToolCall]) -> list[dict]:
+        """执行角色允许的语义工具；任何越权或坐标式调用都被拒绝。"""
+        valid_maps = {"campus_center", "arts_hallway", "clubroom", "rooftop"}
+        results: list[dict] = []
+        for call in tool_calls:
+            if call.npc_id != agent_name:
+                routing_logger.warning(
+                    "[%s] 拒绝越权空间工具调用: %s/%s",
+                    agent_name,
+                    call.name,
+                    call.npc_id,
+                )
+                results.append({"name": call.name, "ok": False, "reason": "only_self"})
+                continue
+            if call.name == "set_following":
+                state = read_spatial_state()
+                try:
+                    updated = set_npc_following(
+                        state,
+                        npc_id=agent_name,
+                        following=call.following,
+                    )
+                except ValueError:
+                    results.append({"name": call.name, "ok": False, "reason": "not_present"})
+                    continue
+                write_spatial_state(updated)
+                results.append({
+                    "name": call.name,
+                    "ok": True,
+                    "npc_id": agent_name,
+                    "following": call.following,
+                })
+                continue
+            if call.name != "move_npc":
+                results.append({"name": call.name, "ok": False, "reason": "unknown_tool"})
+                continue
+            if call.destination not in valid_maps:
+                routing_logger.warning(
+                    "[%s] 拒绝非法空间目的地: %s",
+                    agent_name,
+                    call.destination,
+                )
+                results.append({"name": call.name, "ok": False, "reason": "invalid_destination"})
+                continue
+            state = read_spatial_state()
+            try:
+                updated = move_npc(
+                    state,
+                    npc_id=agent_name,
+                    destination=cast(MapId, call.destination),
+                    waypoint=call.waypoint,
+                )
+            except ValueError:
+                routing_logger.warning(
+                    "[%s] 拒绝非法 waypoint: %s/%s",
+                    agent_name,
+                    call.destination,
+                    call.waypoint,
+                )
+                results.append({"name": call.name, "ok": False, "reason": "invalid_waypoint"})
+                continue
+            write_spatial_state(updated)
+            results.append({
+                "name": call.name,
+                "ok": True,
+                "npc_id": agent_name,
+                "destination": call.destination,
+                "waypoint": call.waypoint or updated.npc_waypoints.get(agent_name, ""),
+                "route": updated.npc_routes.get(agent_name, []),
+            })
+        return results
 
     def _build_prompt(
         self,
@@ -108,6 +194,16 @@ class ConversationService:
                 results.append(r)
 
         results.extend(character_repo.apply_status_fields(name, output.status))
+        relationship_entry = sync_relationship_from_status(name, output.status)
+        if relationship_entry is not None:
+            results.append(
+                FileUpdateResult(
+                    file="relationship_state.json",
+                    target="和玩家的关系",
+                    operation="replace",
+                    after=relationship_entry.model_dump_json(ensure_ascii=False),
+                )
+            )
 
         for event_name in output.triggered:
             r = intent_queue.remove(name, status_fields.PLANS, event_name)

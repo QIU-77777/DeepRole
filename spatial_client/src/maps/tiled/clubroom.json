@@ -1,0 +1,53 @@
+{
+  "type": "map",
+  "version": "1.10",
+  "tiledversion": "1.10.2",
+  "orientation": "orthogonal",
+  "renderorder": "right-down",
+  "width": 20,
+  "height": 14,
+  "tilewidth": 32,
+  "tileheight": 32,
+  "layers": [
+    {"id": 1, "name": "walls", "type": "objectgroup", "objects": [
+      {"id": 1, "x": 0, "y": 0, "width": 640, "height": 32},
+      {"id": 2, "x": 0, "y": 416, "width": 640, "height": 32},
+      {"id": 3, "x": 0, "y": 0, "width": 32, "height": 448},
+      {"id": 4, "x": 608, "y": 0, "width": 32, "height": 448},
+      {"id": 5, "x": 96, "y": 96, "width": 128, "height": 32},
+      {"id": 6, "x": 416, "y": 96, "width": 128, "height": 32},
+      {"id": 7, "x": 288, "y": 192, "width": 64, "height": 128}
+    ]},
+    {"id": 2, "name": "exits", "type": "objectgroup", "objects": [
+      {"id": 8, "name": "to_arts_hallway", "x": 256, "y": 0, "width": 128, "height": 64, "properties": [
+        {"name": "target", "type": "string", "value": "arts_hallway"}, {"name": "spawn_x", "type": "int", "value": 10},
+        {"name": "spawn_y", "type": "int", "value": 3}, {"name": "minutes", "type": "int", "value": 5}
+      ]},
+      {"id": 9, "name": "to_rooftop", "x": 544, "y": 160, "width": 64, "height": 96, "properties": [
+        {"name": "target", "type": "string", "value": "rooftop"}, {"name": "spawn_x", "type": "int", "value": 2},
+        {"name": "spawn_y", "type": "int", "value": 7}, {"name": "minutes", "type": "int", "value": 5}
+      ]}
+    ]},
+    {"id": 3, "name": "waypoints", "type": "objectgroup", "objects": [
+      {"id": 10, "name": "rehearsal_table", "type": "waypoint", "x": 160, "y": 160},
+      {"id": 11, "name": "window", "type": "waypoint", "x": 480, "y": 160},
+      {"id": 12, "name": "door", "type": "waypoint", "x": 320, "y": 384}
+    ]},
+    {"id": 4, "name": "npcs", "type": "objectgroup", "objects": [
+      {"id": 13, "name": "linxi", "x": 128, "y": 160, "width": 24, "height": 30, "properties": [
+        {"name": "label", "type": "string", "value": "林溪"}, {"name": "color", "type": "string", "value": "#cf6b67"},
+        {"name": "interaction", "type": "string", "value": "主要角色"}, {"name": "waypoint", "type": "string", "value": "rehearsal_table"}
+      ]},
+      {"id": 14, "name": "shenzhiyi", "x": 480, "y": 160, "width": 24, "height": 30, "properties": [
+        {"name": "label", "type": "string", "value": "沈知意"}, {"name": "color", "type": "string", "value": "#d2ad58"},
+        {"name": "interaction", "type": "string", "value": "主要角色"}, {"name": "waypoint", "type": "string", "value": "window"}
+      ]}
+    ]}
+  ],
+  "properties": [
+    {"name": "map_id", "type": "string", "value": "clubroom"},
+    {"name": "label", "type": "string", "value": "剧社活动室"},
+    {"name": "background", "type": "color", "value": "#9d7d68"},
+    {"name": "spawn_x", "type": "int", "value": 10}, {"name": "spawn_y", "type": "int", "value": 12}
+  ]
+}

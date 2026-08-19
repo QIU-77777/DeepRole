@@ -133,3 +133,43 @@ async def test_player_message_extracts_and_reuses_name_for_raw(tmp_path, monkeyp
     player_turn = await router.broadcast_player_message(["mitsuki"], "今天天气好")
     assert player_turn == 6
     assert written[1]["content"] == "## 北原悠\n今天天气好"
+
+
+@pytest.mark.asyncio
+async def test_spatial_visibility_can_be_narrower_than_response_targets(tmp_path, monkeypatch):
+    written: list[dict] = []
+
+    async def fake_append_message(message: dict) -> None:
+        written.append(dict(message))
+
+    monkeypatch.setattr(router_module, "append_message", fake_append_message)
+    monkeypatch.setattr(router_module, "read_turn_counter", lambda: 4)
+
+    router = MessageRouter()
+    await router.broadcast_player_message(
+        ["linxi", "shenzhiyi"],
+        "（小声）只告诉林溪。",
+        visible_to=["linxi"],
+    )
+
+    assert written[0]["visible_to"] == ["linxi", "narrator"]
+
+
+@pytest.mark.asyncio
+async def test_spatial_tool_result_keeps_interaction_id(tmp_path, monkeypatch):
+    written: list[dict] = []
+
+    async def fake_append_message(message: dict) -> None:
+        written.append(dict(message))
+
+    monkeypatch.setattr(router_module, "append_message", fake_append_message)
+    monkeypatch.setattr(router_module, "read_turn_counter", lambda: 4)
+
+    await MessageRouter().broadcast_tool_result(
+        ["linxi"],
+        {"name": "move_npc", "ok": True},
+        interaction_id="abc123",
+    )
+
+    assert written[0]["role"] == "tool"
+    assert written[0]["interaction_id"] == "abc123"

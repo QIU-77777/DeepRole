@@ -1,0 +1,107 @@
+{
+  "tileSize": 32,
+  "maps": {
+    "campus_center": {
+      "label": "校园中心",
+      "width": 32,
+      "height": 20,
+      "background": "#789b7e",
+      "spawn": { "x": 5, "y": 10 },
+      "walls": [
+        { "x": 0, "y": 0, "w": 32, "h": 1 },
+        { "x": 0, "y": 19, "w": 32, "h": 1 },
+        { "x": 0, "y": 0, "w": 1, "h": 20 },
+        { "x": 31, "y": 0, "w": 1, "h": 20 },
+        { "x": 10, "y": 5, "w": 12, "h": 1 },
+        { "x": 10, "y": 14, "w": 12, "h": 1 }
+      ],
+      "exits": [
+        { "id": "to_arts_hallway", "x": 30, "y": 8, "w": 2, "h": 4, "target": "arts_hallway", "spawn": { "x": 2, "y": 10 }, "minutes": 10 },
+        { "id": "to_dorm", "x": 14, "y": 18, "w": 4, "h": 2, "target": "campus_center", "spawn": { "x": 16, "y": 17 }, "minutes": 0, "endDay": true }
+      ],
+      "waypoints": {
+        "fountain": { "x": 8, "y": 9 },
+        "dorm_exit": { "x": 16, "y": 17 }
+      },
+      "npcs": [
+        { "id": "ambient_student", "label": "路过的学生", "x": 8, "y": 9, "color": "#91b6a1", "interaction": "环境气泡", "kind": "ambient", "bubble": "公告栏上贴着新的演出海报，边角还没压平。" }
+      ]
+    },
+    "arts_hallway": {
+      "label": "艺术楼走廊",
+      "width": 24,
+      "height": 16,
+      "background": "#aa8d72",
+      "spawn": { "x": 2, "y": 10 },
+      "walls": [
+        { "x": 0, "y": 0, "w": 24, "h": 1 },
+        { "x": 0, "y": 15, "w": 24, "h": 1 },
+        { "x": 0, "y": 0, "w": 1, "h": 16 },
+        { "x": 23, "y": 0, "w": 1, "h": 16 },
+        { "x": 7, "y": 1, "w": 1, "h": 14 },
+        { "x": 16, "y": 1, "w": 1, "h": 14 }
+      ],
+      "exits": [
+        { "id": "to_campus_center", "x": 0, "y": 8, "w": 2, "h": 4, "target": "campus_center", "spawn": { "x": 29, "y": 10 }, "minutes": 10 },
+        { "id": "to_clubroom", "x": 8, "y": 0, "w": 4, "h": 2, "target": "clubroom", "spawn": { "x": 12, "y": 12 }, "minutes": 5 }
+      ],
+      "waypoints": {
+        "hall_north": { "x": 12, "y": 3 },
+        "clubroom_door": { "x": 10, "y": 2 }
+      },
+      "npcs": []
+    },
+    "clubroom": {
+      "label": "剧社活动室",
+      "width": 20,
+      "height": 14,
+      "background": "#9d7d68",
+      "spawn": { "x": 10, "y": 12 },
+      "walls": [
+        { "x": 0, "y": 0, "w": 20, "h": 1 },
+        { "x": 0, "y": 13, "w": 20, "h": 1 },
+        { "x": 0, "y": 0, "w": 1, "h": 14 },
+        { "x": 19, "y": 0, "w": 1, "h": 14 },
+        { "x": 3, "y": 3, "w": 4, "h": 1 },
+        { "x": 13, "y": 3, "w": 4, "h": 1 },
+        { "x": 9, "y": 6, "w": 2, "h": 4 }
+      ],
+      "exits": [
+        { "id": "to_arts_hallway", "x": 8, "y": 0, "w": 4, "h": 2, "target": "arts_hallway", "spawn": { "x": 10, "y": 3 }, "minutes": 5 },
+        { "id": "to_rooftop", "x": 17, "y": 5, "w": 2, "h": 3, "target": "rooftop", "spawn": { "x": 2, "y": 7 }, "minutes": 5 }
+      ],
+      "waypoints": {
+        "rehearsal_table": { "x": 5, "y": 5 },
+        "window": { "x": 15, "y": 5 },
+        "door": { "x": 10, "y": 12 }
+      },
+      "npcs": [
+        { "id": "linxi", "label": "林溪", "x": 4, "y": 5, "color": "#cf6b67", "interaction": "主要角色", "waypoint": "rehearsal_table" },
+        { "id": "shenzhiyi", "label": "沈知意", "x": 15, "y": 5, "color": "#d2ad58", "interaction": "主要角色", "waypoint": "window" }
+      ]
+    },
+    "rooftop": {
+      "label": "天台",
+      "width": 18,
+      "height": 14,
+      "background": "#6c8792",
+      "spawn": { "x": 2, "y": 7 },
+      "walls": [
+        { "x": 0, "y": 0, "w": 18, "h": 1 },
+        { "x": 0, "y": 13, "w": 18, "h": 1 },
+        { "x": 0, "y": 0, "w": 1, "h": 14 },
+        { "x": 17, "y": 0, "w": 1, "h": 14 },
+        { "x": 5, "y": 4, "w": 8, "h": 1 },
+        { "x": 5, "y": 9, "w": 8, "h": 1 }
+      ],
+      "exits": [
+        { "id": "to_clubroom", "x": 0, "y": 6, "w": 2, "h": 3, "target": "clubroom", "spawn": { "x": 16, "y": 6 }, "minutes": 5 }
+      ],
+      "waypoints": {
+        "railing": { "x": 8, "y": 6 },
+        "stairs": { "x": 2, "y": 7 }
+      },
+      "npcs": []
+    }
+  }
+}
