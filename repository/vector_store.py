@@ -24,7 +24,7 @@ from repository.llm.embedding import (
 )
 from models import EpisodeMemory
 from models.dates import canonical_cn_date
-from repository.config import character_path, runtime_dir, get_agent_names
+from repository.config import character_path, get_agent_names
 
 _CN_DATE_RE = re.compile(r"^\d{1,2}月\d{1,2}日$")
 
@@ -40,12 +40,17 @@ class _PreparedEpisode(NamedTuple):
 
 # ----------------------------- 配置与常量 -----------------------------
 
-DB_PATH = str(runtime_dir() / "vectors.sqlite")
-
 __all__ = [
     "VectorStore",
     "vector_store",
+    "vector_db_path",
 ]
+
+
+def vector_db_path() -> str:
+    """当前用户向量库路径：data/runtime/{user_id}/vectors.sqlite。"""
+    from repository.config import runtime_dir
+    return str(runtime_dir() / "vectors.sqlite")
 
 
 # FTS 只保留中英文和数字，其他标点交给 jieba 切分后丢弃
@@ -169,7 +174,8 @@ class VectorStore:
     """
 
     def __init__(self):
-        self._db: aiosqlite.Connection | None = None
+        # 连接按 user 缓存：user_id -> 独立 sqlite 连接
+        self._dbs: dict[str, aiosqlite.Connection] = {}
         self.character_path = character_path
         self._background_tasks: set[asyncio.Task] = set()
         # 连接/建表懒初始化必须串行化；sqlite 扩展加载不是可重复幂等操作。
@@ -178,9 +184,15 @@ class VectorStore:
         # 单连接下显式串行化写事务；按事件循环懒初始化避免跨 loop 复用报错
         self._write_lock: asyncio.Lock | None = None
         self._write_lock_loop: asyncio.AbstractEventLoop | None = None
-        # 建表只需执行一次；同样按事件循环绑定
-        self._tables_initialized: bool = False
-        self._tables_initialized_loop: asyncio.AbstractEventLoop | None = None
+        # 建表只需执行一次；同样按事件循环绑定，且按 user 隔离
+        self._tables_initialized: dict[str, asyncio.AbstractEventLoop] = {}
+
+    def _user_key(self) -> str:
+        from repository.user_context import current_user_id
+        return current_user_id.get()
+
+    def _user_db_path(self) -> str:
+        return vector_db_path()
 
     def _get_write_lock(self) -> asyncio.Lock:
         """获取当前事件循环绑定的写锁。"""
@@ -198,12 +210,11 @@ class VectorStore:
             self._init_lock_loop = loop
         return self._init_lock
 
-    def _schema_ready_for_loop(self) -> bool:
+    def _schema_ready_for_loop(self, user_key: str) -> bool:
         loop = asyncio.get_running_loop()
         return (
-            self._db is not None
-            and self._tables_initialized
-            and self._tables_initialized_loop is loop
+            self._dbs.get(user_key) is not None
+            and self._tables_initialized.get(user_key) is loop
         )
 
     @staticmethod
@@ -313,26 +324,30 @@ class VectorStore:
             raise RuntimeError(f"加载 sqlite-vec 扩展失败: {e}")
 
     async def _get_db(self) -> aiosqlite.Connection:
-        if self._db is not None:
-            return self._db
-
+        key = self._user_key()
+        conn = self._dbs.get(key)
+        if conn is not None:
+            return conn
         async with self._get_init_lock():
             return await self._open_db_locked()
 
     async def _open_db_locked(self) -> aiosqlite.Connection:
         """打开并加载扩展；调用方必须持有初始化锁。"""
-        if self._db is not None:
-            return self._db
+        key = self._user_key()
+        conn = self._dbs.get(key)
+        if conn is not None:
+            return conn
 
-        os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-        db = await aiosqlite.connect(DB_PATH)
+        path = self._user_db_path()
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        db = await aiosqlite.connect(path)
         try:
             await db.execute("PRAGMA journal_mode=WAL;")
             await self._load_sqlite_vec(db)
         except Exception:
             await db.close()
             raise
-        self._db = db
+        self._dbs[key] = db
         return db
 
     async def close(self) -> None:
@@ -341,13 +356,13 @@ class VectorStore:
         aiosqlite 为每个连接维护后台 worker thread。命令行脚本如果不显式关闭，
         主协程结束后进程仍可能等待该线程，表现为脚本打印完成但不退出。
         """
-        if self._db is not None:
-            await self._db.close()
-        self._db = None
+        for conn in self._dbs.values():
+            if conn is not None:
+                await conn.close()
+        self._dbs = {}
         self._init_lock = None
         self._init_lock_loop = None
-        self._tables_initialized = False
-        self._tables_initialized_loop = None
+        self._tables_initialized = {}
         self._write_lock = None
         self._write_lock_loop = None
 
@@ -376,27 +391,27 @@ class VectorStore:
 
     async def _open_existing_schema(self) -> aiosqlite.Connection | None:
         loop = asyncio.get_running_loop()
+        user_key = self._user_key()
         async with self._get_init_lock():
-            if self._schema_ready_for_loop():
-                return self._db
+            if self._schema_ready_for_loop(user_key):
+                return self._dbs.get(user_key)
             db = await self._open_db_locked()
             if not await self._vector_tables_exist(db):
                 return None
-            self._tables_initialized = True
-            self._tables_initialized_loop = loop
+            self._tables_initialized[user_key] = loop
             return db
 
     async def _create_schema(self, embedding_dim: int) -> None:
         loop = asyncio.get_running_loop()
+        user_key = self._user_key()
         async with self._get_init_lock():
-            if self._schema_ready_for_loop():
+            if self._schema_ready_for_loop(user_key):
                 db = await self._open_db_locked()
                 existing_dim = await self._get_existing_vec_dim(db)
                 if existing_dim is None or existing_dim == embedding_dim:
                     return
                 # 维度变更：重置标志，强制走后面的重建逻辑
-                self._tables_initialized = False
-                self._tables_initialized_loop = None
+                self._tables_initialized.pop(user_key, None)
 
             if embedding_dim <= 0:
                 raise ValueError(f"embedding_dim 必须是正整数: {embedding_dim}")
@@ -458,8 +473,7 @@ class VectorStore:
                 """
             )
             await db.commit()
-            self._tables_initialized = True
-            self._tables_initialized_loop = loop
+            self._tables_initialized[user_key] = loop
 
     async def _delete_chunks(
         self, db: aiosqlite.Connection, memory_owner: str, date: str | None = None

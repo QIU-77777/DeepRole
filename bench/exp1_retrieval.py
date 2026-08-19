@@ -42,8 +42,8 @@ os.makedirs(RESULTS_DIR, exist_ok=True)
 
 # 实验用独立 DB，不污染正式向量库
 _EXP_DB = os.path.join(RESULTS_DIR, "exp1_vectors.sqlite")
-vs_mod.DB_PATH = _EXP_DB
-rt.DB_PATH = _EXP_DB
+vs_mod.vector_db_path = lambda: _EXP_DB
+rt.vector_db_path = lambda: _EXP_DB
 if os.path.exists(_EXP_DB):
     for suffix in ("", "-wal", "-shm"):
         try:

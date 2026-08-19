@@ -25,7 +25,7 @@ def fake_embedding(monkeypatch):
 @pytest.mark.asyncio
 async def test_add_understanding_indexes_vector_and_bm25(tmp_path, monkeypatch, fake_embedding):
     db_path = tmp_path / "vectors.sqlite"
-    monkeypatch.setattr(vector_store_module, "DB_PATH", str(db_path))
+    monkeypatch.setattr(vector_store_module, "vector_db_path", lambda: str(db_path))
     store = VectorStore()
 
     await store.add_understanding(
@@ -72,7 +72,7 @@ async def test_add_understanding_indexes_vector_and_bm25(tmp_path, monkeypatch, 
 @pytest.mark.asyncio
 async def test_auto_embedding_dimension_uses_first_real_embedding(tmp_path, monkeypatch):
     db_path = tmp_path / "vectors.sqlite"
-    monkeypatch.setattr(vector_store_module, "DB_PATH", str(db_path))
+    monkeypatch.setattr(vector_store_module, "vector_db_path", lambda: str(db_path))
     calls: list[list[str]] = []
 
     async def _fake_embed_async(texts: list[str]) -> list[list[float]]:
@@ -123,7 +123,7 @@ async def test_delete_understanding_owner_removes_understanding_tables(
     tmp_path, monkeypatch, fake_embedding
 ):
     db_path = tmp_path / "vectors.sqlite"
-    monkeypatch.setattr(vector_store_module, "DB_PATH", str(db_path))
+    monkeypatch.setattr(vector_store_module, "vector_db_path", lambda: str(db_path))
     store = VectorStore()
 
     await store.add_understanding(
@@ -167,7 +167,7 @@ async def test_delete_all_agents_full_clear_removes_understandings(
     tmp_path, monkeypatch, fake_embedding
 ):
     db_path = tmp_path / "vectors.sqlite"
-    monkeypatch.setattr(vector_store_module, "DB_PATH", str(db_path))
+    monkeypatch.setattr(vector_store_module, "vector_db_path", lambda: str(db_path))
     monkeypatch.setattr(vector_store_module, "get_agent_names", lambda: ["alice", "bob"])
     store = VectorStore()
 

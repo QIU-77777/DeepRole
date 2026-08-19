@@ -217,13 +217,11 @@ class TestSaveLoadConsistency:
     async def test_vector_index_consistency_after_save_load(self, tmp_path, monkeypatch):
         """验证 save-load 循环后向量索引一致性"""
         test_db_path = str(tmp_path / "test_vectors.sqlite")
-        monkeypatch.setattr(vector_store_module, "DB_PATH", test_db_path)
-        monkeypatch.setattr(retrieval_module, "DB_PATH", test_db_path)
+        monkeypatch.setattr(vector_store_module, "vector_db_path", lambda: test_db_path)
+        monkeypatch.setattr(retrieval_module, "vector_db_path", lambda: test_db_path)
 
         store = vector_store
-        if store._db is not None:
-            await store._db.close()
-        store._db = None
+        await store.close()
         monkeypatch.setattr(store, "character_path", make_character_path(tmp_path))
         monkeypatch.setattr(save_manager_module, "character_path", make_character_path(tmp_path))
 
@@ -294,6 +292,4 @@ class TestSaveLoadConsistency:
             search_result_after = search_memories("lilith", "第一轮对话")
             assert search_result_after != "（无相关记忆）", "load 后应该能搜索到数据"
         finally:
-            if store._db is not None:
-                await store._db.close()
-                store._db = None
+            await store.close()

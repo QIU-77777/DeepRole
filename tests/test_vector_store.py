@@ -56,22 +56,18 @@ pytestmark = pytest.mark.skipif(
 
 
 # 使用测试数据库路径，避免污染真实数据
-test_db_path = str(project_root / "data" / "runtime" / "test_vectors.sqlite")
+# 默认用户（DEFAULT_USER_ID）的向量库即 data/runtime/default/vectors.sqlite
+test_db_path = str(project_root / "data" / "runtime" / "default" / "vectors.sqlite")
 
 
 @pytest_asyncio.fixture
 async def clean_store(monkeypatch):
     """提供清理后的 VectorStore，每个测试隔离。"""
-    # 使用 monkeypatch 修改 DB_PATH，避免全局污染
-    monkeypatch.setattr(vector_store_module, "DB_PATH", test_db_path)
-    monkeypatch.setattr(retrieval_module, "DB_PATH", test_db_path)
+    from repository.user_context import current_user_id, DEFAULT_USER_ID
+    current_user_id.set(DEFAULT_USER_ID)
 
     store = vector_store
-
-    # 重置连接状态，避免跨用例共享缓存
-    if store._db is not None:
-        await store._db.close()
-    store._db = None
+    await store.close()
 
     # 确保目录存在
     os.makedirs(os.path.dirname(test_db_path), exist_ok=True)
@@ -83,9 +79,7 @@ async def clean_store(monkeypatch):
     yield store
 
     # 清理：关闭数据库连接
-    if store._db is not None:
-        await store._db.close()
-        store._db = None
+    await store.close()
 
     # 删除测试数据库文件
     if os.path.exists(test_db_path):

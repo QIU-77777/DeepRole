@@ -20,7 +20,7 @@ def test_format_retrieved_memory_keeps_undated_content_compatible():
 
 def test_search_memories_returns_empty_when_vector_db_missing(tmp_path, monkeypatch):
     db_path = tmp_path / "missing.sqlite"
-    monkeypatch.setattr(retrieval_module, "DB_PATH", str(db_path))
+    monkeypatch.setattr(retrieval_module, "vector_db_path", lambda: str(db_path))
 
     def fail_candidate_lookup(*_args, **_kwargs):
         raise AssertionError("candidate lookup should not run without a vector DB")
@@ -38,7 +38,7 @@ def test_search_memories_returns_empty_when_vector_db_missing(tmp_path, monkeypa
 def test_search_memories_returns_empty_when_vector_schema_missing(tmp_path, monkeypatch):
     db_path = tmp_path / "empty.sqlite"
     db_path.touch()
-    monkeypatch.setattr(retrieval_module, "DB_PATH", str(db_path))
+    monkeypatch.setattr(retrieval_module, "vector_db_path", lambda: str(db_path))
     monkeypatch.setattr(retrieval_module.VectorStore, "_load_sqlite_vec_sync", lambda _conn: None)
 
     def fail_candidate_lookup(*_args, **_kwargs):
@@ -56,7 +56,7 @@ def test_search_memories_returns_empty_when_vector_schema_missing(tmp_path, monk
 def test_search_understandings_returns_empty_when_vector_schema_missing(tmp_path, monkeypatch):
     db_path = tmp_path / "empty.sqlite"
     db_path.touch()
-    monkeypatch.setattr(retrieval_module, "DB_PATH", str(db_path))
+    monkeypatch.setattr(retrieval_module, "vector_db_path", lambda: str(db_path))
     monkeypatch.setattr(retrieval_module.VectorStore, "_load_sqlite_vec_sync", lambda _conn: None)
 
     def fail_candidate_lookup(*_args, **_kwargs):

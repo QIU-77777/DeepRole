@@ -31,9 +31,8 @@ async def test_close_resets_connection_state() -> None:
     store = VectorStore()
     fake_connection = FakeConnection()
     loop = asyncio.get_running_loop()
-    store._db = fake_connection  # type: ignore[assignment]
-    store._tables_initialized = True
-    store._tables_initialized_loop = loop
+    store._dbs = {store._user_key(): fake_connection}  # type: ignore[assignment]
+    store._tables_initialized = {store._user_key(): loop}
     store._init_lock = asyncio.Lock()
     store._init_lock_loop = loop
     store._write_lock = asyncio.Lock()
@@ -42,11 +41,10 @@ async def test_close_resets_connection_state() -> None:
     await store.close()
 
     assert fake_connection.closed is True
-    assert store._db is None
+    assert store._dbs == {}
     assert store._init_lock is None
     assert store._init_lock_loop is None
-    assert store._tables_initialized is False
-    assert store._tables_initialized_loop is None
+    assert store._tables_initialized == {}
     assert store._write_lock is None
     assert store._write_lock_loop is None
 
@@ -60,7 +58,7 @@ async def test_close_without_connection_is_noop() -> None:
 
     await store.close()
 
-    assert store._db is None
+    assert store._dbs == {}
     assert store._init_lock is None
     assert store._init_lock_loop is None
 
@@ -90,8 +88,8 @@ async def test_concurrent_export_recall_state_initializes_connection_once(
 
     monkeypatch.setattr(
         vector_store_module,
-        "DB_PATH",
-        str(tmp_path / "vectors.sqlite"),
+        "vector_db_path",
+        lambda: str(tmp_path / "vectors.sqlite"),
     )
     monkeypatch.setattr(vector_store_module.aiosqlite, "connect", fake_connect)
     monkeypatch.setattr(VectorStore, "_load_sqlite_vec", fake_load_sqlite_vec)
@@ -105,4 +103,4 @@ async def test_concurrent_export_recall_state_initializes_connection_once(
     assert results == [{}, {}, {}, {}]
     assert len(connections) == 1
     assert load_calls == connections
-    assert store._tables_initialized is False
+    assert store._tables_initialized == {}

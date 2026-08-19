@@ -26,13 +26,13 @@ from dotenv import load_dotenv
 
 load_dotenv(project_root / ".env")
 
-from repository.vector_store import DB_PATH
+from repository.vector_store import vector_db_path
 
 
 async def _open_db() -> aiosqlite.Connection | None:
-    if not Path(DB_PATH).exists():
+    if not Path(vector_db_path()).exists():
         return None
-    return await aiosqlite.connect(DB_PATH)
+    return await aiosqlite.connect(vector_db_path())
 
 
 async def cmd_list():

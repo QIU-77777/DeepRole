@@ -17,7 +17,7 @@ from repository.llm.embedding import embed_sync
 from repository.llm.rerank import rerank, RERANK_MODEL
 from models.dates import canonical_cn_date, game_day_diff
 from repository.status_file import extract_status_field
-from repository.vector_store import vector_store, VectorStore, DB_PATH
+from repository.vector_store import vector_store, VectorStore, vector_db_path
 
 
 # ----------------------------- Pipeline 工具函数 -----------------------------
@@ -331,7 +331,7 @@ def search_memories(
     """
     if not query or not query.strip():
         return "（无相关记忆）"
-    if not Path(DB_PATH).exists():
+    if not Path(vector_db_path()).exists():
         return "（无相关记忆）"
 
     # Step 1: 计算查询向量
@@ -344,7 +344,7 @@ def search_memories(
 
     conn: sqlite3.Connection | None = None
     try:
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(vector_db_path())
         VectorStore._load_sqlite_vec_sync(conn)
         if not _sync_tables_exist(conn, {"EpisodeMemory", "EpisodeMemory_vec"}):
             return "（无相关记忆）"
@@ -421,7 +421,7 @@ def search_understandings(
     """
     if not query or not query.strip():
         return ""
-    if not Path(DB_PATH).exists():
+    if not Path(vector_db_path()).exists():
         return ""
 
     try:
@@ -437,7 +437,7 @@ def search_understandings(
 
     conn: sqlite3.Connection | None = None
     try:
-        conn = sqlite3.connect(DB_PATH)
+        conn = sqlite3.connect(vector_db_path())
         VectorStore._load_sqlite_vec_sync(conn)
         if not _sync_tables_exist(conn, {"Understanding", "Understanding_vec"}):
             return ""
