@@ -142,8 +142,8 @@ async def test_narrator_route_passes_new_characters(monkeypatch):
 def character_dir(tmp_path: Path, monkeypatch):
     from repository import config as shared_config
 
-    monkeypatch.setattr(shared_config, "CHARACTERS_DIR", tmp_path)
-    monkeypatch.setattr(character_factory_module, "CHARACTERS_DIR", tmp_path)
+    monkeypatch.setattr(shared_config, "characters_dir", lambda: tmp_path)
+    monkeypatch.setattr(character_factory_module, "characters_dir", lambda: tmp_path)
     return tmp_path
 
 

@@ -14,7 +14,7 @@ import zipfile
 from datetime import datetime
 from pathlib import Path
 
-from repository.config import CHARACTERS_DIR, PROJECT_ROOT, character_path, get_agent_names
+from repository.config import PROJECT_ROOT, character_path, characters_dir, get_agent_names, runtime_dir
 from repository.log_config.routing import routing_logger
 from repository.agent_files import read_agent_file
 from repository.runtime_state import (
@@ -116,20 +116,20 @@ async def reset_game(story_id: str = "drama") -> tuple[str, str]:
             await vector_store.delete_all_agents(all_agents)
 
         # 2. 删除整个 characters 目录（如果存在）
-        characters_dir = str(CHARACTERS_DIR)
-        if os.path.exists(characters_dir):
+        chars_dir = str(characters_dir())
+        if os.path.exists(chars_dir):
             try:
-                shutil.rmtree(characters_dir)
-                print(f"  已删除: {characters_dir}", flush=True)
+                shutil.rmtree(chars_dir)
+                print(f"  已删除: {chars_dir}", flush=True)
             except Exception as e:
-                print(f"  删除失败 {characters_dir}: {e}", flush=True)
+                print(f"  删除失败 {chars_dir}: {e}", flush=True)
 
         # 3. 从对应故事模板完整复制
         story_template_dir = str(TEMPLATES_DIR / story_id)
         if os.path.exists(story_template_dir):
             try:
-                shutil.copytree(story_template_dir, characters_dir)
-                print(f"  已复制: {story_template_dir} -> {characters_dir}", flush=True)
+                shutil.copytree(story_template_dir, chars_dir)
+                print(f"  已复制: {story_template_dir} -> {chars_dir}", flush=True)
             except Exception as e:
                 print(f"  复制失败: {e}", flush=True)
         else:
@@ -140,10 +140,8 @@ async def reset_game(story_id: str = "drama") -> tuple[str, str]:
         os.makedirs(raw_dir, exist_ok=True)
         print(f"  已创建: {raw_dir}", flush=True)
 
-        read_player_name.cache_clear()
-
         # 5. 写入 story_id，并清空当前存档节点。新开局的第一次保存是世界线根节点。
-        story_id_path = os.path.join(characters_dir, ".story_id")
+        story_id_path = os.path.join(chars_dir, ".story_id")
         with open(story_id_path, "w", encoding="utf-8") as f:
             f.write(story_id)
         print(f"  已写入: {story_id_path}", flush=True)
@@ -284,7 +282,7 @@ def list_save_archives() -> list[dict]:
     Returns:
         存档信息列表，每项包含 filename、display_time
     """
-    save_dir = PROJECT_ROOT / "saves"
+    save_dir = runtime_dir() / "saves"
     if not save_dir.exists():
         return []
 
@@ -410,7 +408,7 @@ def delete_save_leaf(save_filename: str) -> tuple[str | None, str | None]:
         routing_logger.warning("[delete_leaf_save] 存档仍有子分支: %s", save_filename)
         return None, "has_children"
 
-    save_path = PROJECT_ROOT / "saves" / save_filename
+    save_path = runtime_dir() / "saves" / save_filename
     try:
         save_path.unlink()
     except FileNotFoundError:
@@ -462,7 +460,7 @@ def delete_save_game(root_filename: str) -> list[str] | None:
         if save_id:
             stack.extend(children_by_parent.get(save_id, []))
 
-    save_dir = PROJECT_ROOT / "saves"
+    save_dir = runtime_dir() / "saves"
     deleted: list[str] = []
     deleted_ids = {_clean_meta_text(save.get("save_id")) for save in to_delete}
     for save in to_delete:
@@ -484,7 +482,6 @@ def delete_save_game(root_filename: str) -> list[str] | None:
 
 def _restore_player_name_from_raw_history() -> None:
     """旧存档没有 .player_name 时，从第一条玩家 raw 消息恢复一次。"""
-    read_player_name.cache_clear()
     if read_player_name():
         return
 
@@ -509,7 +506,7 @@ async def import_save_archive(save_filename: str) -> bool:
         print(f"[读档] 非法文件名: {save_filename}", flush=True)
         return False
 
-    save_path = PROJECT_ROOT / "saves" / save_filename
+    save_path = runtime_dir() / "saves" / save_filename
     if not save_path.exists():
         print(f"[读档] 存档文件不存在: {save_path}", flush=True)
         return False
@@ -534,13 +531,13 @@ async def import_save_archive(save_filename: str) -> bool:
 
         archive_meta = _read_archive_metadata(save_path)
 
-        characters_dir = str(CHARACTERS_DIR)
-        if os.path.exists(characters_dir):
-            shutil.rmtree(characters_dir)
-            print(f"[读档] 已删除: {characters_dir}", flush=True)
+        chars_dir = str(characters_dir())
+        if os.path.exists(chars_dir):
+            shutil.rmtree(chars_dir)
+            print(f"[读档] 已删除: {chars_dir}", flush=True)
         log_step("删除旧角色目录")
 
-        os.makedirs(characters_dir, exist_ok=True)
+        os.makedirs(chars_dir, exist_ok=True)
         with zipfile.ZipFile(str(save_path), "r") as zf:
             for member in zf.namelist():
                 if member == "metadata.json":
@@ -548,15 +545,14 @@ async def import_save_archive(save_filename: str) -> bool:
                 if os.path.basename(member) == "milestones.md":
                     print(f"[读档] 跳过旧里程碑文件: {member}", flush=True)
                     continue
-                zf.extract(member, characters_dir)
+                zf.extract(member, chars_dir)
                 print(f"[读档] 已恢复: {member}", flush=True)
         log_step("解压存档")
 
-        read_player_name.cache_clear()
         _restore_player_name_from_raw_history()
         log_step("校验玩家名")
 
-        story_id_path = os.path.join(characters_dir, ".story_id")
+        story_id_path = os.path.join(chars_dir, ".story_id")
         if not os.path.exists(story_id_path):
             story_id = _story_id_from_metadata(archive_meta, save_path)
             with open(story_id_path, "w", encoding="utf-8") as f:
@@ -638,7 +634,7 @@ def _get_agent_save_files(agent_name: str) -> list[str]:
 
 def _read_save_id() -> str:
     """读取当前游戏来源标记。它不再参与存档文件名选择。"""
-    save_id_path = CHARACTERS_DIR / ".save_id"
+    save_id_path = characters_dir() / ".save_id"
     try:
         return save_id_path.read_text(encoding="utf-8").strip()
     except Exception:
@@ -647,18 +643,18 @@ def _read_save_id() -> str:
 
 def _write_save_id(save_id: str) -> None:
     """更新当前游戏来源标记。"""
-    save_id_path = CHARACTERS_DIR / ".save_id"
+    save_id_path = characters_dir() / ".save_id"
     save_id_path.write_text(save_id, encoding="utf-8")
 
 
 def _clear_save_id() -> None:
-    save_id_path = CHARACTERS_DIR / ".save_id"
+    save_id_path = characters_dir() / ".save_id"
     save_id_path.unlink(missing_ok=True)
 
 
 def _read_story_theme() -> str:
     """读取 .story_id 标记文件，返回故事主题（如 school / drama）"""
-    story_id_path = CHARACTERS_DIR / ".story_id"
+    story_id_path = characters_dir() / ".story_id"
     try:
         return story_id_path.read_text(encoding="utf-8").strip()
     except Exception:
@@ -767,7 +763,7 @@ async def export_save_archive_with_detail() -> tuple[str | None, str | None]:
     parent_save_id = _read_save_id()
     turn = read_turn_counter()
 
-    save_dir = PROJECT_ROOT / "saves"
+    save_dir = runtime_dir() / "saves"
     os.makedirs(save_dir, exist_ok=True)
 
     filename, save_path, save_id = _build_new_save_path(theme, save_dir)
@@ -819,7 +815,7 @@ async def export_save_archive_with_detail() -> tuple[str | None, str | None]:
             print(f"[存档] 已添加: .save_id")
 
             for marker in [".story_id", ".turn_counter.json", PLAYER_NAME_FILENAME]:
-                marker_path = CHARACTERS_DIR / marker
+                marker_path = characters_dir() / marker
                 if marker_path.exists():
                     zf.write(str(marker_path), marker)
                     print(f"[存档] 已添加: {marker}")
@@ -828,7 +824,7 @@ async def export_save_archive_with_detail() -> tuple[str | None, str | None]:
                 agent_files = _get_agent_save_files(agent_name)
                 for filepath in agent_files:
                     if os.path.exists(filepath):
-                        arcname = os.path.relpath(filepath, start=str(CHARACTERS_DIR))
+                        arcname = os.path.relpath(filepath, start=str(characters_dir()))
                         if (
                             agent_name != "narrator"
                             and os.path.basename(filepath) == "memory.jsonl"

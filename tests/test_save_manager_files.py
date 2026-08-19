@@ -16,11 +16,11 @@ from repository.runtime_state import PLAYER_NAME_FILENAME
 
 @pytest.fixture
 def character_dir(tmp_path: Path, monkeypatch):
-    """把 CHARACTERS_DIR 指到临时目录，避免污染仓库数据。"""
+    """把角色目录指到临时目录，避免污染仓库数据。"""
     from repository import config as shared_config
 
-    monkeypatch.setattr(shared_config, "CHARACTERS_DIR", tmp_path)
-    monkeypatch.setattr(save_manager, "CHARACTERS_DIR", tmp_path)
+    monkeypatch.setattr(shared_config, "characters_dir", lambda: tmp_path)
+    monkeypatch.setattr(save_manager, "characters_dir", lambda: tmp_path)
     return tmp_path
 
 
@@ -47,8 +47,8 @@ def test_restore_player_name_from_raw_history(tmp_path: Path, monkeypatch):
         encoding="utf-8",
     )
 
-    monkeypatch.setattr(shared_config, "CHARACTERS_DIR", tmp_path)
-    monkeypatch.setattr(runtime_state_module, "CHARACTERS_DIR", tmp_path)
+    monkeypatch.setattr(shared_config, "characters_dir", lambda: tmp_path)
+    monkeypatch.setattr(runtime_state_module, "characters_dir", lambda: tmp_path)
 
     save_manager._restore_player_name_from_raw_history()
 
@@ -170,9 +170,9 @@ async def test_export_new_save_uses_fresh_slot_filename(tmp_path: Path, monkeypa
     (narrator_dir / "soul.md").write_text("# narrator\n", encoding="utf-8")
     (narrator_dir / "status.md").write_text("## 叙事焦点\n屋顶\n", encoding="utf-8")
 
-    monkeypatch.setattr(save_manager, "PROJECT_ROOT", tmp_path)
-    monkeypatch.setattr(save_manager, "CHARACTERS_DIR", characters_dir)
-    monkeypatch.setattr(runtime_state_module, "CHARACTERS_DIR", characters_dir)
+    monkeypatch.setattr(save_manager, "runtime_dir", lambda: tmp_path)
+    monkeypatch.setattr(save_manager, "characters_dir", lambda: characters_dir)
+    monkeypatch.setattr(runtime_state_module, "characters_dir", lambda: characters_dir)
     monkeypatch.setattr(save_manager, "get_agent_names", lambda: ["narrator"])
     monkeypatch.setattr(
         save_manager,
@@ -283,7 +283,7 @@ def test_list_save_worldlines_groups_by_story_and_parent(tmp_path: Path, monkeyp
         },
     )
 
-    monkeypatch.setattr(save_manager, "PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(save_manager, "runtime_dir", lambda: tmp_path)
 
     worlds = save_manager.list_save_worldlines()
     by_story = {world["story_id"]: world for world in worlds}
@@ -337,8 +337,8 @@ def test_delete_save_game_deletes_root_descendants_and_clears_current(
         {"save_id": "c", "story_id": "school", "created_at": "2026-05-09T11:00:00"},
     )
 
-    monkeypatch.setattr(save_manager, "PROJECT_ROOT", tmp_path)
-    monkeypatch.setattr(save_manager, "CHARACTERS_DIR", characters_dir)
+    monkeypatch.setattr(save_manager, "runtime_dir", lambda: tmp_path)
+    monkeypatch.setattr(save_manager, "characters_dir", lambda: characters_dir)
 
     deleted = save_manager.delete_save_game("school_a.zip")
 
@@ -380,8 +380,8 @@ def test_delete_save_leaf_only_allows_non_parent_nodes(
         },
     )
 
-    monkeypatch.setattr(save_manager, "PROJECT_ROOT", tmp_path)
-    monkeypatch.setattr(save_manager, "CHARACTERS_DIR", characters_dir)
+    monkeypatch.setattr(save_manager, "runtime_dir", lambda: tmp_path)
+    monkeypatch.setattr(save_manager, "characters_dir", lambda: characters_dir)
 
     deleted, reason = save_manager.delete_save_leaf("school_a.zip")
 

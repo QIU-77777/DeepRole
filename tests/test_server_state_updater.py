@@ -19,7 +19,7 @@ except ModuleNotFoundError as exc:
 
 @pytest.fixture(autouse=True)
 def isolate_last_choices_file(monkeypatch, tmp_path):
-    monkeypatch.setattr(server_module, "_LAST_CHOICES_FILE", tmp_path / "last_choices.json")
+    monkeypatch.setattr(server_module, "_last_choices_file", lambda: tmp_path / "last_choices.json")
     server_module._pending_choices_task = None
     server_module._choices_generation_token = 0
     yield

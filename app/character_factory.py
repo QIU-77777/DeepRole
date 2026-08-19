@@ -14,7 +14,11 @@ from repository.sdk_runner import run_structured_agent
 from app.llm_schema import LLMNewCharacterProfile, LLMNewCharacterRequest
 from repository.llm.config import get_llm_config
 from repository.log_config.routing import routing_logger
-from repository.config import AGENT_RUN_TIMEOUT_SECONDS, CHARACTERS_DIR, get_agent_names
+from repository.config import (
+    AGENT_RUN_TIMEOUT_SECONDS,
+    characters_dir,
+    get_agent_names,
+)
 from models.character import extract_identity, get_display_name
 from repository.status_file import extract_status_field
 from repository.agent_files import read_agent_file
@@ -168,7 +172,7 @@ def _write_bootstrap_files(
     creation: LLMNewCharacterProfile,
     soul_content: str,
 ) -> None:
-    agent_dir = CHARACTERS_DIR / creation.character_id
+    agent_dir = characters_dir() / creation.character_id
     agent_dir.mkdir(parents=True, exist_ok=True)
 
     (agent_dir / "soul.md").write_text(soul_content, encoding="utf-8")

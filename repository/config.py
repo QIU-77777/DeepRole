@@ -10,10 +10,20 @@
 import tomllib
 from pathlib import Path
 
+from repository.user_context import current_user_id
+
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-RUNTIME_DIR = PROJECT_ROOT / "data" / "runtime"
-CHARACTERS_DIR = RUNTIME_DIR / "characters"
+
+
+def runtime_dir() -> Path:
+    """当前用户的运行时数据目录：data/runtime/{user_id}。"""
+    return PROJECT_ROOT / "data" / "runtime" / current_user_id.get()
+
+
+def characters_dir() -> Path:
+    """当前用户的角色目录：data/runtime/{user_id}/characters。"""
+    return runtime_dir() / "characters"
 
 with open(PROJECT_ROOT / "config.toml", "rb") as _f:
     _cfg = tomllib.load(_f)
@@ -59,7 +69,7 @@ HISTORY_RAW_SCAN_TURNS: int = _cfg["history"]["raw_scan_turns"]
 
 
 def character_path(character_name: str, *subpaths: str) -> str:
-    """构建角色数据路径
+    """构建当前用户下角色的数据路径。
 
     Args:
         character_name: 角色名称
@@ -70,13 +80,13 @@ def character_path(character_name: str, *subpaths: str) -> str:
 
     Example:
         >>> character_path("lilith", "soul.md")
-        "/abs/path/to/data/runtime/characters/lilith/soul.md"
+        "/abs/path/to/data/runtime/{user_id}/characters/lilith/soul.md"
     """
-    return str(CHARACTERS_DIR / character_name / Path(*subpaths))
+    return str(characters_dir() / character_name / Path(*subpaths))
 
 
 def get_agent_names(include_narrator: bool = True) -> list[str]:
-    """获取角色名称列表（每次动态扫描 data/runtime/characters/）
+    """获取角色名称列表（每次动态扫描当前用户的 data/runtime/{user_id}/characters/）
 
     Args:
         include_narrator: 是否包含 narrator，默认 True
@@ -84,11 +94,12 @@ def get_agent_names(include_narrator: bool = True) -> list[str]:
     Returns:
         角色名称列表，按字母顺序排序
     """
-    if not CHARACTERS_DIR.exists():
+    chars_dir = characters_dir()
+    if not chars_dir.exists():
         return []
     agents = sorted(
         d.name
-        for d in CHARACTERS_DIR.iterdir()
+        for d in chars_dir.iterdir()
         if d.is_dir() and not d.name.startswith(".") and not d.name.startswith("_")
     )
     if not include_narrator:

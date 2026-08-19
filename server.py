@@ -44,7 +44,7 @@ from repository.save_manager import (
 )
 from repository.log_config.routing import routing_logger
 from repository.log_config.logfire import setup_logfire
-from repository.config import CHARACTERS_DIR, get_agent_names
+from repository.config import characters_dir, get_agent_names
 from repository.narrator_output import extract_narrator_output
 from models.character import get_display_name
 from repository.status_file import extract_status_field
@@ -66,7 +66,12 @@ def reset_entities() -> None:
 app = FastAPI(title="DeepRole")
 
 STATIC_DIR = Path(__file__).parent / "static"
-_LAST_CHOICES_FILE = CHARACTERS_DIR / "last_choices.json"
+
+
+def _last_choices_file() -> Path:
+    return characters_dir() / "last_choices.json"
+
+
 _pending_state_update_task: asyncio.Task[None] | None = None
 _pending_state_update_requested = False
 _pending_choices_task: asyncio.Task[list[str]] | None = None
@@ -83,18 +88,18 @@ _MEMORY_GRAPH_RAW_LIMIT = 12000
 
 
 def _save_last_choices(choices: list[str]) -> None:
-    _LAST_CHOICES_FILE.write_text(json.dumps(choices, ensure_ascii=False), encoding="utf-8")
+    _last_choices_file().write_text(json.dumps(choices, ensure_ascii=False), encoding="utf-8")
 
 
 def _load_last_choices() -> list[str]:
     try:
-        return json.loads(_LAST_CHOICES_FILE.read_text(encoding="utf-8"))
+        return json.loads(_last_choices_file().read_text(encoding="utf-8"))
     except (FileNotFoundError, json.JSONDecodeError):
         return []
 
 
 def _clear_last_choices() -> None:
-    _LAST_CHOICES_FILE.unlink(missing_ok=True)
+    _last_choices_file().unlink(missing_ok=True)
 
 
 def _consume_cancelled_choices_task(task: asyncio.Task[list[str]]) -> None:

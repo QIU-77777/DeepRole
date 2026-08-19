@@ -24,7 +24,7 @@ from repository.llm.embedding import (
 )
 from models import EpisodeMemory
 from models.dates import canonical_cn_date
-from repository.config import character_path, RUNTIME_DIR, get_agent_names
+from repository.config import character_path, runtime_dir, get_agent_names
 
 _CN_DATE_RE = re.compile(r"^\d{1,2}月\d{1,2}日$")
 
@@ -40,7 +40,7 @@ class _PreparedEpisode(NamedTuple):
 
 # ----------------------------- 配置与常量 -----------------------------
 
-DB_PATH = str(RUNTIME_DIR / "vectors.sqlite")
+DB_PATH = str(runtime_dir() / "vectors.sqlite")
 
 __all__ = [
     "VectorStore",

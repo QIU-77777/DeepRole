@@ -2,9 +2,8 @@
 
 import json
 import re
-from functools import cache
 
-from repository.config import CHARACTERS_DIR
+from repository.config import characters_dir
 from repository.agent_files import load_text
 
 _TURN_COUNTER_FILENAME = ".turn_counter.json"
@@ -18,24 +17,22 @@ def extract_player_name(content: str) -> str:
     return match.group(1).strip() if match else ""
 
 
-@cache
 def read_player_name() -> str:
     """读取全局玩家显示名；不存在返回空字符串。"""
-    return load_text(CHARACTERS_DIR / PLAYER_NAME_FILENAME).strip()
+    return load_text(characters_dir() / PLAYER_NAME_FILENAME).strip()
 
 
 def write_player_name(player_name: str) -> None:
     """写入全局玩家显示名。空值不写入。"""
     if not (name := player_name.strip()):
         return
-    CHARACTERS_DIR.mkdir(parents=True, exist_ok=True)
-    (CHARACTERS_DIR / PLAYER_NAME_FILENAME).write_text(name, encoding="utf-8")
-    read_player_name.cache_clear()
+    characters_dir().mkdir(parents=True, exist_ok=True)
+    (characters_dir() / PLAYER_NAME_FILENAME).write_text(name, encoding="utf-8")
 
 
 def read_turn_counter() -> int:
     """读取全局 narrator turn 计数器；不存在或解析失败返回 0。"""
-    path = CHARACTERS_DIR / _TURN_COUNTER_FILENAME
+    path = characters_dir() / _TURN_COUNTER_FILENAME
     if not path.exists():
         return 0
     try:
@@ -47,8 +44,8 @@ def read_turn_counter() -> int:
 
 def write_turn_counter(turn: int) -> None:
     """将 narrator turn 计数写入全局 sidecar。"""
-    CHARACTERS_DIR.mkdir(parents=True, exist_ok=True)
-    path = CHARACTERS_DIR / _TURN_COUNTER_FILENAME
+    characters_dir().mkdir(parents=True, exist_ok=True)
+    path = characters_dir() / _TURN_COUNTER_FILENAME
     path.write_text(json.dumps({"turn": int(turn)}, ensure_ascii=False), encoding="utf-8")
 
 

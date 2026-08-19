@@ -10,15 +10,13 @@ os.chdir(project_root)
 
 import repository.message_router as router_module
 import repository.runtime_state as runtime_state_module
-from repository.runtime_state import PLAYER_NAME_FILENAME, read_player_name
+from repository.runtime_state import PLAYER_NAME_FILENAME
 from repository.message_router import MessageRouter
 
 
 @pytest.fixture(autouse=True)
 def clear_player_name_between_tests():
-    read_player_name.cache_clear()
     yield
-    read_player_name.cache_clear()
 
 
 @pytest.mark.asyncio
@@ -37,7 +35,7 @@ async def test_narrator_response_starts_next_turn(tmp_path, monkeypatch):
     async def fake_append_message(message: dict) -> None:
         written.append(dict(message))
 
-    monkeypatch.setattr(runtime_state_module, "CHARACTERS_DIR", tmp_path)
+    monkeypatch.setattr(runtime_state_module, "characters_dir", lambda: tmp_path)
     monkeypatch.setattr(router_module, "read_turn_counter", fake_read_turn_counter)
     monkeypatch.setattr(router_module, "increment_turn_counter", fake_increment_turn_counter)
     monkeypatch.setattr(router_module, "append_message", fake_append_message)
@@ -72,7 +70,7 @@ async def test_broadcast_narrator_output_writes_structured_scene(tmp_path, monke
     async def fake_append_message(message: dict) -> None:
         written.append(dict(message))
 
-    monkeypatch.setattr(runtime_state_module, "CHARACTERS_DIR", tmp_path)
+    monkeypatch.setattr(runtime_state_module, "characters_dir", lambda: tmp_path)
     monkeypatch.setattr(router_module, "increment_turn_counter", fake_increment_turn_counter)
     monkeypatch.setattr(router_module, "append_message", fake_append_message)
 
@@ -118,7 +116,7 @@ async def test_player_message_extracts_and_reuses_name_for_raw(tmp_path, monkeyp
     def fake_read_turn_counter() -> int:
         return current_turn
 
-    monkeypatch.setattr(runtime_state_module, "CHARACTERS_DIR", tmp_path)
+    monkeypatch.setattr(runtime_state_module, "characters_dir", lambda: tmp_path)
     monkeypatch.setattr(router_module, "read_turn_counter", fake_read_turn_counter)
     monkeypatch.setattr(router_module, "append_message", fake_append_message)
 
