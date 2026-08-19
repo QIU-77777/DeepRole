@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from "vue";
-import { createSpatialGame, type MapId, type SpatialGameState } from "./game";
+import type { MapId, SpatialGameState } from "./game";
 import type Phaser from "phaser";
 
 const gameHost = ref<HTMLElement | null>(null);
@@ -373,6 +373,7 @@ onMounted(async () => {
     message.value = "空间状态服务未连接，使用本地灰盒初始状态。";
   }
   if (gameHost.value) {
+    const { createSpatialGame } = await import("./game");
     game = createSpatialGame(gameHost.value, {
       onState: syncSnapshot,
       onTransition: transition,

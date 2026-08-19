@@ -29,6 +29,7 @@ def test_character_can_only_start_own_following_when_present(tmp_path, monkeypat
     spatial_state.write_spatial_state(SpatialState(
         player={"map_id": "clubroom", "x": 400, "y": 400, "spawn_id": "clubroom_door"},
         npc_locations={"linxi": "clubroom", "shenzhiyi": "rooftop"},
+        npc_overrides={"shenzhiyi": "rooftop"},
     ))
 
     service = ConversationService()
