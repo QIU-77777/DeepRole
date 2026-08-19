@@ -1,7 +1,10 @@
 import Phaser from "phaser";
+import artsHallwayBackground from "./assets/arts-hallway-background.svg";
+import campusCenterBackground from "./assets/campus-center-background.svg";
 import clubroomBackground from "./assets/clubroom-background.svg";
 import linxiActor from "./assets/linxi-actor.svg";
 import playerActor from "./assets/player-actor.svg";
+import rooftopBackground from "./assets/rooftop-background.svg";
 import shenzhiyiActor from "./assets/shenzhiyi-actor.svg";
 import campusCenterMap from "./maps/tiled/campus_center.json";
 import artsHallwayMap from "./maps/tiled/arts_hallway.json";
@@ -67,7 +70,10 @@ class SpatialScene extends Phaser.Scene {
   }
 
   preload() {
+    this.load.image("campus-center-background", campusCenterBackground);
+    this.load.image("arts-hallway-background", artsHallwayBackground);
     this.load.image("clubroom-background", clubroomBackground);
+    this.load.image("rooftop-background", rooftopBackground);
     this.load.image("actor-player", playerActor);
     this.load.image("actor-linxi", linxiActor);
     this.load.image("actor-shenzhiyi", shenzhiyiActor);
@@ -167,7 +173,7 @@ class SpatialScene extends Phaser.Scene {
     this.drawSceneSurface(definition);
     this.walls = this.physics.add.staticGroup();
     for (const wall of definition.walls) {
-      if (mapId !== "clubroom") this.drawWallBlock(wall);
+      if (!this.sceneBackgroundKey(mapId)) this.drawWallBlock(wall);
       const body = this.add.rectangle((wall.x + wall.w / 2) * mapData.tileSize, (wall.y + wall.h / 2) * mapData.tileSize, wall.w * mapData.tileSize, wall.h * mapData.tileSize, 0x000000, 0);
       body.setVisible(false);
       this.physics.add.existing(body, true);
@@ -193,8 +199,9 @@ class SpatialScene extends Phaser.Scene {
   }
 
   private drawSceneSurface(definition: MapDefinition) {
-    if (this.mapId === "clubroom") {
-      this.add.image(0, 0, "clubroom-background")
+    const backgroundKey = this.sceneBackgroundKey(this.mapId);
+    if (backgroundKey) {
+      this.add.image(0, 0, backgroundKey)
         .setOrigin(0, 0)
         .setDisplaySize(definition.width * mapData.tileSize, definition.height * mapData.tileSize)
         .setDepth(-10);
@@ -216,6 +223,15 @@ class SpatialScene extends Phaser.Scene {
     for (let x = 0; x <= definition.width; x += 1) graphics.lineBetween(x * mapData.tileSize, 0, x * mapData.tileSize, definition.height * mapData.tileSize);
     for (let y = 0; y <= definition.height; y += 1) graphics.lineBetween(0, y * mapData.tileSize, definition.width * mapData.tileSize, y * mapData.tileSize);
     this.drawMapDecorations();
+  }
+
+  private sceneBackgroundKey(mapId: MapId): string | undefined {
+    return {
+      campus_center: "campus-center-background",
+      arts_hallway: "arts-hallway-background",
+      clubroom: "clubroom-background",
+      rooftop: "rooftop-background",
+    }[mapId];
   }
 
   private drawWallBlock(wall: { x: number; y: number; w: number; h: number }) {

@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="576" height="448" viewBox="0 0 576 448" shape-rendering="crispEdges">
+  <defs>
+    <linearGradient id="sky" x1="0" x2="0" y2="1"><stop stop-color="#48677b"/><stop offset="1" stop-color="#9b786d"/></linearGradient>
+    <pattern id="roof" width="32" height="32" patternUnits="userSpaceOnUse"><rect width="32" height="32" fill="#7d8c8d"/><path d="M0 2h32M0 30h32M2 0v32M30 0v32" stroke="#aab6ab" stroke-width="2" opacity=".32"/></pattern>
+  </defs>
+  <rect width="576" height="448" fill="url(#sky)"/>
+  <path d="M0 150l64-20 52 18 58-36 64 25 56-41 70 38 63-26 99 35v69H0z" fill="#324c58" opacity=".65"/>
+  <rect x="32" y="32" width="512" height="384" fill="url(#roof)"/>
+  <rect x="32" y="32" width="512" height="8" fill="#d4d5bb"/>
+  <rect x="32" y="408" width="512" height="8" fill="#4f625f"/>
+  <rect x="32" y="32" width="8" height="384" fill="#d4d5bb"/><rect x="536" y="32" width="8" height="384" fill="#d4d5bb"/>
+
+  <!-- raised central utility room follows the two collision strips -->
+  <rect x="160" y="128" width="256" height="32" fill="#455b5a"/><rect x="160" y="128" width="256" height="8" fill="#c4c7ae"/>
+  <rect x="160" y="288" width="256" height="32" fill="#455b5a"/><rect x="160" y="312" width="256" height="8" fill="#344b4c"/>
+  <rect x="240" y="160" width="96" height="128" fill="#89928b" opacity=".78"/>
+  <rect x="256" y="184" width="64" height="88" fill="#596d6c"/><rect x="264" y="192" width="48" height="72" fill="#2d4b56"/>
+
+  <!-- railings, plants, benches and stair access -->
+  <path d="M64 90h448M64 90v56m48-56v56m48-56v56m48-56v56m144-56v56m48-56v56m48-56v56m48-56v56" stroke="#d1d7bd" stroke-width="4" opacity=".9"/>
+  <g><rect x="104" y="350" width="104" height="34" fill="#79523e"/><rect x="112" y="334" width="88" height="24" fill="#567d5c"/><circle cx="130" cy="332" r="15" fill="#789e61"/><circle cx="172" cy="330" r="17" fill="#5d8759"/></g>
+  <g><rect x="368" y="350" width="104" height="34" fill="#79523e"/><rect x="376" y="334" width="88" height="24" fill="#567d5c"/><circle cx="394" cy="332" r="15" fill="#789e61"/><circle cx="436" cy="330" r="17" fill="#5d8759"/></g>
+  <rect x="48" y="194" width="54" height="94" fill="#4b5f62"/><path d="M54 274h42m-42-14h42m-42-14h42m-42-14h42" stroke="#c7c9ad" stroke-width="4"/>
+  <path d="M78 174l22-14m352 10 20-13" stroke="#f2cf83" stroke-width="4" opacity=".9"/>
+</svg>

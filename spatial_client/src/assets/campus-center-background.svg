@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="640" viewBox="0 0 1024 640" shape-rendering="crispEdges">
+  <defs>
+    <pattern id="grass" width="32" height="32" patternUnits="userSpaceOnUse">
+      <rect width="32" height="32" fill="#5e8b69"/>
+      <path d="M3 8h5m11 11h6M8 27h4" stroke="#89ae75" stroke-width="2" opacity=".45"/>
+    </pattern>
+    <pattern id="stone" width="32" height="32" patternUnits="userSpaceOnUse">
+      <rect width="32" height="32" fill="#c9bd9b"/>
+      <path d="M0 2h32M0 30h32M2 0v32M30 0v32" stroke="#e3d9b7" stroke-width="2" opacity=".55"/>
+    </pattern>
+  </defs>
+  <rect width="1024" height="640" fill="url(#grass)"/>
+  <rect x="32" y="32" width="960" height="576" fill="#d9c9a0" opacity=".08"/>
+
+  <!-- campus paths, shaped to retain the map's walkable areas -->
+  <rect x="32" y="288" width="960" height="96" fill="url(#stone)"/>
+  <rect x="464" y="32" width="96" height="576" fill="url(#stone)"/>
+  <rect x="320" y="192" width="384" height="256" fill="#c5b48e"/>
+  <rect x="320" y="192" width="384" height="8" fill="#ede2c0"/>
+  <rect x="320" y="440" width="384" height="8" fill="#a39273"/>
+
+  <!-- library facade, intentionally behind the upper collision bar -->
+  <rect x="320" y="44" width="384" height="116" fill="#596c66"/>
+  <rect x="336" y="56" width="352" height="96" fill="#93a48c"/>
+  <rect x="350" y="66" width="54" height="42" fill="#496b7a"/>
+  <rect x="430" y="66" width="54" height="42" fill="#496b7a"/>
+  <rect x="540" y="66" width="54" height="42" fill="#496b7a"/>
+  <rect x="620" y="66" width="54" height="42" fill="#496b7a"/>
+  <rect x="482" y="108" width="60" height="44" fill="#5a4b43"/>
+  <rect x="470" y="48" width="84" height="12" fill="#d6b364"/>
+
+  <!-- fountain plaza -->
+  <ellipse cx="256" cy="320" rx="92" ry="40" fill="#435950" opacity=".38"/>
+  <ellipse cx="256" cy="306" rx="84" ry="36" fill="#8f866f"/>
+  <ellipse cx="256" cy="298" rx="66" ry="24" fill="#6ba2aa"/>
+  <ellipse cx="256" cy="292" rx="36" ry="11" fill="#c7ebdf" opacity=".7"/>
+  <rect x="248" y="264" width="16" height="32" fill="#e3d1a2"/>
+  <rect x="240" y="256" width="32" height="12" fill="#f3e3b8"/>
+  <path d="M256 252v-26M246 252l-9-17m29 17 9-17" stroke="#d9f6e9" stroke-width="4" opacity=".85"/>
+
+  <!-- autumn trees and notice board -->
+  <g><ellipse cx="104" cy="173" rx="46" ry="16" fill="#284a36" opacity=".35"/><rect x="98" y="134" width="12" height="42" fill="#674936"/><circle cx="104" cy="122" r="42" fill="#537a4d"/><circle cx="82" cy="112" r="22" fill="#789951"/><circle cx="126" cy="106" r="24" fill="#a17e48"/></g>
+  <g><ellipse cx="860" cy="173" rx="46" ry="16" fill="#284a36" opacity=".35"/><rect x="854" y="134" width="12" height="42" fill="#674936"/><circle cx="860" cy="122" r="42" fill="#4e754e"/><circle cx="838" cy="112" r="22" fill="#789951"/><circle cx="882" cy="106" r="24" fill="#a17e48"/></g>
+  <g><ellipse cx="872" cy="496" rx="46" ry="16" fill="#284a36" opacity=".35"/><rect x="866" y="457" width="12" height="42" fill="#674936"/><circle cx="872" cy="445" r="42" fill="#537a4d"/><circle cx="850" cy="435" r="22" fill="#8d9951"/><circle cx="894" cy="429" r="24" fill="#a17e48"/></g>
+  <rect x="92" y="404" width="78" height="70" fill="#573f31"/><rect x="100" y="412" width="62" height="44" fill="#e8d291"/><path d="M110 422h42m-42 12h42m-42 12h31" stroke="#9c5b4a" stroke-width="4"/>
+
+  <!-- dormitory gate at the lower exit -->
+  <rect x="448" y="576" width="128" height="32" fill="#405c55"/><rect x="456" y="576" width="48" height="32" fill="#e2d1a2"/><rect x="520" y="576" width="48" height="32" fill="#e2d1a2"/><path d="M512 576v32" stroke="#6c5140" stroke-width="4"/>
+  <path d="M672 470l12 6m-38 25 10 7M232 500l12 8" stroke="#d6a34d" stroke-width="4" opacity=".75"/>
+</svg>
