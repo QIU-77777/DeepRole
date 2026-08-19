@@ -1,4 +1,8 @@
 import Phaser from "phaser";
+import clubroomBackground from "./assets/clubroom-background.svg";
+import linxiActor from "./assets/linxi-actor.svg";
+import playerActor from "./assets/player-actor.svg";
+import shenzhiyiActor from "./assets/shenzhiyi-actor.svg";
 import campusCenterMap from "./maps/tiled/campus_center.json";
 import artsHallwayMap from "./maps/tiled/arts_hallway.json";
 import clubroomMap from "./maps/tiled/clubroom.json";
@@ -60,6 +64,13 @@ class SpatialScene extends Phaser.Scene {
 
   constructor() {
     super("spatial-scene");
+  }
+
+  preload() {
+    this.load.image("clubroom-background", clubroomBackground);
+    this.load.image("actor-player", playerActor);
+    this.load.image("actor-linxi", linxiActor);
+    this.load.image("actor-shenzhiyi", shenzhiyiActor);
   }
 
   create(data: { hooks: Hooks }) {
@@ -156,7 +167,7 @@ class SpatialScene extends Phaser.Scene {
     this.drawSceneSurface(definition);
     this.walls = this.physics.add.staticGroup();
     for (const wall of definition.walls) {
-      this.drawWallBlock(wall);
+      if (mapId !== "clubroom") this.drawWallBlock(wall);
       const body = this.add.rectangle((wall.x + wall.w / 2) * mapData.tileSize, (wall.y + wall.h / 2) * mapData.tileSize, wall.w * mapData.tileSize, wall.h * mapData.tileSize, 0x000000, 0);
       body.setVisible(false);
       this.physics.add.existing(body, true);
@@ -167,7 +178,7 @@ class SpatialScene extends Phaser.Scene {
     this.player.setVisible(false);
     this.physics.add.existing(this.player);
     this.player.setDepth(10);
-    this.playerVisual = this.createActorVisual(0xe9e0bd, 0x6e5960);
+    this.playerVisual = this.createActorVisual(0xe9e0bd, 0x6e5960, "actor-player");
     this.playerVisual.setPosition(this.player.x, this.player.y).setDepth(20);
     this.physics.add.collider(this.player, this.walls);
     this.cameras.main.startFollow(this.player, true, 0.08, 0.08);
@@ -182,6 +193,13 @@ class SpatialScene extends Phaser.Scene {
   }
 
   private drawSceneSurface(definition: MapDefinition) {
+    if (this.mapId === "clubroom") {
+      this.add.image(0, 0, "clubroom-background")
+        .setOrigin(0, 0)
+        .setDisplaySize(definition.width * mapData.tileSize, definition.height * mapData.tileSize)
+        .setDepth(-10);
+      return;
+    }
     const graphics = this.add.graphics().setDepth(-10);
     const base = Number(definition.background.replace("#", "0x"));
     const light = Phaser.Display.Color.IntegerToColor(base).lighten(7).color;
@@ -339,11 +357,16 @@ class SpatialScene extends Phaser.Scene {
     graphics.fillCircle(x * mapData.tileSize, (y - 0.18) * mapData.tileSize, 14);
   }
 
-  private createActorVisual(bodyColor: number, accentColor: number): Phaser.GameObjects.Container {
+  private createActorVisual(bodyColor: number, accentColor: number, textureKey?: string): Phaser.GameObjects.Container {
     const container = this.add.container(0, 0);
     const graphics = this.add.graphics();
     graphics.fillStyle(0x14221c, 0.35);
     graphics.fillEllipse(0, 14, 26, 9);
+    if (textureKey) {
+      const sprite = this.add.image(0, 10, textureKey).setOrigin(0.5, 1).setScale(0.72);
+      container.add([graphics, sprite]);
+      return container;
+    }
     graphics.fillStyle(bodyColor, 1);
     graphics.fillRoundedRect(-10, -1, 20, 20, 5);
     graphics.fillStyle(0xf2c9a5, 1);
@@ -376,7 +399,8 @@ class SpatialScene extends Phaser.Scene {
     const first = path?.[0] ?? { x, y };
     const body = this.add.rectangle((first.x + 0.5) * mapData.tileSize, (first.y + 0.5) * mapData.tileSize, 18, 18, 0x000000, 0);
     body.setVisible(false);
-    const visual = this.createActorVisual(Number(npc.color.replace("#", "0x")), npc.id === "linxi" ? 0x8a4e5a : 0x59658c);
+    const actorTexture = npc.id === "linxi" ? "actor-linxi" : npc.id === "shenzhiyi" ? "actor-shenzhiyi" : undefined;
+    const visual = this.createActorVisual(Number(npc.color.replace("#", "0x")), npc.id === "linxi" ? 0x8a4e5a : 0x59658c, actorTexture);
     visual.setPosition(body.x, body.y).setDepth(15 + body.y / 10000);
     const label = this.add.text(body.x, body.y - 28, npc.label, { color: "#fff8e5", fontFamily: "sans-serif", fontSize: "13px", backgroundColor: "#17231fcc", padding: { x: 4, y: 2 } }).setOrigin(0.5, 1).setDepth(20);
     this.npcs.push({ data: npc, body, visual, label });
