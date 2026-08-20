@@ -272,23 +272,47 @@ class _ConsolidationResult:
 
 
 class MemoryConsolidationFlow:
-    def __init__(self):
-        self._locks: dict[str, asyncio.Lock] = {}
+    def __init__(self) -> None:
+        # 所有状态按 user 分区（key 来自 _user_key()），多用户并发下互不干扰
+        self._locks: dict[str, asyncio.Lock] = {}          # f"{user_id}:{agent_name}"
         # 跟踪正在执行的 detect_and_consolidate 任务数；存档/读档需在为 0 时才允许进行
-        self._active_count: int = 0
-        self._scheduled_task: asyncio.Task[None] | None = None
-        self._pending_turn: int | None = None
-        self.last_created_episodes: list[CreatedEpisodeSummary] = []
+        self._active_by_user: dict[str, int] = {}
+        self._scheduled_by_user: dict[str, asyncio.Task[None] | None] = {}
+        self._pending_turn_by_user: dict[str, int | None] = {}
+        self.last_created_episodes_by_user: dict[str, list] = {}
+
+    def _user_key(self) -> str:
+        from repository.user_context import current_user_id
+
+        return current_user_id.get()
+
+    @property
+    def _scheduled_task(self) -> asyncio.Task[None] | None:
+        """per-user 的 _scheduled_task（保留旧属性名以兼容既有读取）。"""
+        return self._scheduled_by_user.get(self._user_key())
+
+    @_scheduled_task.setter
+    def _scheduled_task(self, value: asyncio.Task[None] | None) -> None:
+        self._scheduled_by_user[self._user_key()] = value
+
+    @property
+    def last_created_episodes(self) -> list[CreatedEpisodeSummary]:
+        return self.last_created_episodes_by_user.setdefault(self._user_key(), [])
+
+    @last_created_episodes.setter
+    def last_created_episodes(self, value: list[CreatedEpisodeSummary]) -> None:
+        self.last_created_episodes_by_user[self._user_key()] = value
 
     @property
     def is_running(self) -> bool:
         """是否有 detect_and_consolidate 任务正在执行（含其内部的 closure detector / consolidate_agent）。"""
-        return self._active_count > 0
+        return self._active_by_user.get(self._user_key(), 0) > 0
 
-    def _get_lock(self, name: str) -> asyncio.Lock:
-        if name not in self._locks:
-            self._locks[name] = asyncio.Lock()
-        return self._locks[name]
+    def _get_lock(self, agent_name: str) -> asyncio.Lock:
+        key = f"{self._user_key()}:{agent_name}"
+        if key not in self._locks:
+            self._locks[key] = asyncio.Lock()
+        return self._locks[key]
 
     async def _run_consolidation_agent(
         self,
@@ -622,7 +646,8 @@ class MemoryConsolidationFlow:
         单轮 pipeline 抛出的异常被吞掉只记日志，避免后台任务以未捕获异常结束触发
         "Task exception was never retrieved" 告警，并让累积的 _pending_turn 仍能补跑。
         """
-        self.last_created_episodes = []
+        key = self._user_key()
+        self.last_created_episodes_by_user[key] = []
         current_turn = initial_turn
         try:
             while True:
@@ -632,18 +657,22 @@ class MemoryConsolidationFlow:
                     memory_logger.error(
                         f"[整理器] turn={current_turn} pipeline 异常 (已吞，不影响主流程): {e}"
                     )
-                next_turn = self._pending_turn
-                self._pending_turn = None
+                next_turn = self._pending_turn_by_user.get(key)
+                self._pending_turn_by_user[key] = None
                 if next_turn is None or next_turn <= current_turn:
                     break
                 current_turn = next_turn
         finally:
-            self._scheduled_task = None
-            self._active_count -= 1
+            self._scheduled_by_user[key] = None
+            self._active_by_user[key] = self._active_by_user.get(key, 0) - 1
 
     def _coalesce_pending_turn(self, current_turn: int) -> None:
-        if self._pending_turn is None or current_turn > self._pending_turn:
-            self._pending_turn = current_turn
+        key = self._user_key()
+        if (
+            self._pending_turn_by_user.get(key) is None
+            or current_turn > self._pending_turn_by_user[key]
+        ):
+            self._pending_turn_by_user[key] = current_turn
 
     async def detect_and_consolidate(self, current_turn: int) -> None:
         """回合末入口（直接 await 版本）。无候选或无闭合时静默返回；失败不影响主流程。"""
@@ -656,16 +685,17 @@ class MemoryConsolidationFlow:
         返回前同步把 is_running 置为 True，避免 create_task 与 SSE done 事件之间的竞态。
         如果已有整理任务在跑，不再新开 closure detector，只记录最新 turn 等当前任务结束后补跑一次。
         """
-        if self._scheduled_task is not None and not self._scheduled_task.done():
+        key = self._user_key()
+        scheduled = self._scheduled_by_user.get(key)
+        if scheduled is not None and not scheduled.done():
             self._coalesce_pending_turn(current_turn)
-            return self._scheduled_task
+            return scheduled
 
-        self._pending_turn = None
-        self._active_count += 1
-        self._scheduled_task = asyncio.create_task(
-            self._run_scheduled_consolidation(current_turn)
-        )
-        return self._scheduled_task
+        self._pending_turn_by_user[key] = None
+        self._active_by_user[key] = self._active_by_user.get(key, 0) + 1
+        task = asyncio.create_task(self._run_scheduled_consolidation(current_turn))
+        self._scheduled_by_user[key] = task
+        return task
 
 
 memory_consolidation_flow = MemoryConsolidationFlow()
