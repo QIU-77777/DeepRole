@@ -279,7 +279,7 @@ class MemoryConsolidationFlow:
         self._active_by_user: dict[str, int] = {}
         self._scheduled_by_user: dict[str, asyncio.Task[None] | None] = {}
         self._pending_turn_by_user: dict[str, int | None] = {}
-        self.last_created_episodes_by_user: dict[str, list] = {}
+        self.last_created_episodes_by_user: dict[str, list[CreatedEpisodeSummary]] = {}
 
     def _user_key(self) -> str:
         from repository.user_context import current_user_id
@@ -297,6 +297,7 @@ class MemoryConsolidationFlow:
 
     @property
     def last_created_episodes(self) -> list[CreatedEpisodeSummary]:
+        # setdefault 在首次读取时会为该 user 分配 key（用户数有界，接受少量惰性分配）
         return self.last_created_episodes_by_user.setdefault(self._user_key(), [])
 
     @last_created_episodes.setter
@@ -644,7 +645,7 @@ class MemoryConsolidationFlow:
         """串行执行后台整理；运行期间收到的新 turn 合并为最后一个 turn 补跑。
 
         单轮 pipeline 抛出的异常被吞掉只记日志，避免后台任务以未捕获异常结束触发
-        "Task exception was never retrieved" 告警，并让累积的 _pending_turn 仍能补跑。
+        "Task exception was never retrieved" 告警，并让累积的 _pending_turn_by_user 仍能补跑。
         """
         key = self._user_key()
         self.last_created_episodes_by_user[key] = []
