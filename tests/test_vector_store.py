@@ -55,35 +55,30 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-# 使用测试数据库路径，避免污染真实数据
-# 默认用户（DEFAULT_USER_ID）的向量库即 data/runtime/default/vectors.sqlite
-test_db_path = str(project_root / "data" / "runtime" / "default" / "vectors.sqlite")
+# 向量库测试路径由 conftest 的 _isolate_vector_db 提供（每测试独立临时目录，
+# 绝不含生产 data/runtime/{user}/vectors.sqlite）；clean_store 在 yield 前把
+# DEFAULT 用户对应的路径写入本模块全局，供同步读取辅助函数使用。
+test_db_path: str = ""
 
 
 @pytest_asyncio.fixture
-async def clean_store(monkeypatch):
+async def clean_store(monkeypatch, _isolate_vector_db):
     """提供清理后的 VectorStore，每个测试隔离。"""
+    global test_db_path
     from repository.user_context import current_user_id, DEFAULT_USER_ID
     current_user_id.set(DEFAULT_USER_ID)
+    test_db_path = _isolate_vector_db()
 
     store = vector_store
     await store.close()
 
-    # 确保目录存在
+    # 确保临时向量库目录存在（同步读取辅助函数可能先于写库打开连接）
     os.makedirs(os.path.dirname(test_db_path), exist_ok=True)
-
-    # 删除旧测试数据库
-    if os.path.exists(test_db_path):
-        os.remove(test_db_path)
 
     yield store
 
     # 清理：关闭数据库连接
     await store.close()
-
-    # 删除测试数据库文件
-    if os.path.exists(test_db_path):
-        os.remove(test_db_path)
 
 
 async def wait_for_search(store, agent_name: str, query: str, timeout: float = 10.0):
