@@ -174,8 +174,8 @@ class VectorStore:
     """
 
     def __init__(self):
-        # 连接按 user 缓存：user_id -> 独立 sqlite 连接
-        self._dbs: dict[str, aiosqlite.Connection] = {}
+        # 连接按 (user, 事件循环) 缓存：同一用户在新 loop 上不会复用旧 loop 的连接
+        self._dbs: dict[tuple[str, asyncio.AbstractEventLoop], aiosqlite.Connection] = {}
         self.character_path = character_path
         self._background_tasks: set[asyncio.Task] = set()
         # 连接/建表懒初始化必须串行化；sqlite 扩展加载不是可重复幂等操作。
@@ -193,6 +193,10 @@ class VectorStore:
 
     def _user_db_path(self) -> str:
         return vector_db_path()
+
+    def _db_key(self) -> tuple[str, asyncio.AbstractEventLoop]:
+        """连接缓存键：按 (user_id, 事件循环) 隔离，防止跨 loop 复用旧连接。"""
+        return (self._user_key(), asyncio.get_running_loop())
 
     def _get_write_lock(self) -> asyncio.Lock:
         """获取当前事件循环绑定的写锁。"""
@@ -213,7 +217,7 @@ class VectorStore:
     def _schema_ready_for_loop(self, user_key: str) -> bool:
         loop = asyncio.get_running_loop()
         return (
-            self._dbs.get(user_key) is not None
+            self._dbs.get((user_key, loop)) is not None
             and self._tables_initialized.get(user_key) is loop
         )
 
@@ -324,7 +328,7 @@ class VectorStore:
             raise RuntimeError(f"加载 sqlite-vec 扩展失败: {e}")
 
     async def _get_db(self) -> aiosqlite.Connection:
-        key = self._user_key()
+        key = self._db_key()
         conn = self._dbs.get(key)
         if conn is not None:
             return conn
@@ -333,7 +337,7 @@ class VectorStore:
 
     async def _open_db_locked(self) -> aiosqlite.Connection:
         """打开并加载扩展；调用方必须持有初始化锁。"""
-        key = self._user_key()
+        key = self._db_key()
         conn = self._dbs.get(key)
         if conn is not None:
             return conn
@@ -394,7 +398,7 @@ class VectorStore:
         user_key = self._user_key()
         async with self._get_init_lock():
             if self._schema_ready_for_loop(user_key):
-                return self._dbs.get(user_key)
+                return self._dbs.get((user_key, loop))
             db = await self._open_db_locked()
             if not await self._vector_tables_exist(db):
                 return None

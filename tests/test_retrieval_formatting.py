@@ -71,8 +71,11 @@ def test_search_understandings_returns_empty_when_vector_schema_missing(tmp_path
     assert search_understandings("mitsuki", "query", qvec=[0.0]) == ""
 
 
-def test_search_memories_uses_bm25_query_for_bm25(monkeypatch):
+def test_search_memories_uses_bm25_query_for_bm25(tmp_path, monkeypatch):
     captured: dict[str, str | None] = {}
+    db_path = tmp_path / "vectors.sqlite"
+    db_path.touch()
+    monkeypatch.setattr(retrieval_module, "vector_db_path", lambda: str(db_path))
 
     class FakeConn:
         def close(self):
@@ -114,8 +117,11 @@ def test_search_memories_uses_bm25_query_for_bm25(monkeypatch):
     assert result == "（无相关记忆）"
 
 
-def test_search_understandings_logs_semantic_and_bm25_queries(monkeypatch):
+def test_search_understandings_logs_semantic_and_bm25_queries(tmp_path, monkeypatch):
     captured: dict[str, str | None] = {}
+    db_path = tmp_path / "vectors.sqlite"
+    db_path.touch()
+    monkeypatch.setattr(retrieval_module, "vector_db_path", lambda: str(db_path))
 
     class FakeConn:
         def close(self):

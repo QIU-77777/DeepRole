@@ -31,7 +31,7 @@ async def test_close_resets_connection_state() -> None:
     store = VectorStore()
     fake_connection = FakeConnection()
     loop = asyncio.get_running_loop()
-    store._dbs = {store._user_key(): fake_connection}  # type: ignore[assignment]
+    store._dbs = {(store._user_key(), loop): fake_connection}  # type: ignore[assignment]
     store._tables_initialized = {store._user_key(): loop}
     store._init_lock = asyncio.Lock()
     store._init_lock_loop = loop
