@@ -36,7 +36,7 @@ class CharacterRepository:
         return Character(name=name, soul=soul)
 
     def invalidate(self, name: str | None = None) -> None:
-        """存档恢复 / reset 后清空 soul 缓存（name=None 清全部）。"""
+        """存档恢复 / reset 后清空 soul 缓存（name=None 清当前用户全部）。"""
         cache = self._user_cache()
         if name is None:
             cache.clear()
