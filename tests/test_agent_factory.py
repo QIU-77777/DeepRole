@@ -129,3 +129,26 @@ def test_conversation_agents_scoped_by_user(monkeypatch):
     assert "af-user-a" in keys_a
     assert "af-user-b" in keys_b
     assert agent_factory._conversation_agents["af-user-a"] is not agent_factory._conversation_agents["af-user-b"]
+
+
+def test_get_conversation_agent_lazy_rebuild_scoped_by_user(monkeypatch):
+    monkeypatch.setattr(agent_factory, "read_agent_file", lambda *_args: "# soul")
+    monkeypatch.setattr(agent_factory, "build_system_prompt", lambda *_args: "system prompt")
+    monkeypatch.setattr(agent_factory, "get_llm_config", lambda: {
+        "api_url": "https://example.com/v1",
+        "api_key": "test-key",
+        "model_id": "deepseek-chat",
+        "temperature": 0.2,
+        "provider": "openai",
+    })
+
+    current_user_id.set("lazy-user-a")
+    agent_factory._conversation_agents.clear()
+    agent_factory.reload_conversation_agent("narrator")
+    current_user_id.set("lazy-user-b")
+    got = agent_factory.get_conversation_agent("narrator")
+    current_user_id.set(DEFAULT_USER_ID)
+    assert got is not None
+    assert "lazy-user-b" in agent_factory._conversation_agents
+    assert "narrator" in agent_factory._conversation_agents["lazy-user-b"]
+    assert "narrator" not in agent_factory._conversation_agents["lazy-user-a"] or agent_factory._conversation_agents["lazy-user-a"]["narrator"] is not got
