@@ -100,3 +100,32 @@ def test_make_sdk_model_uses_configured_openai_compatible_url():
     assert model._provider.name == "openai"
     assert str(model._provider.client.base_url) == "https://example.com/v1/"
     assert model._provider.client.api_key == "test-key"
+
+
+"""conversation agents 按用户分区。"""
+from app import agent_factory
+from repository.user_context import current_user_id, DEFAULT_USER_ID
+
+
+def test_conversation_agents_scoped_by_user(monkeypatch):
+    monkeypatch.setattr(agent_factory, "read_agent_file", lambda *_args: "# soul")
+    monkeypatch.setattr(agent_factory, "build_system_prompt", lambda *_args: "system prompt")
+    monkeypatch.setattr(agent_factory, "get_llm_config", lambda: {
+        "api_url": "https://example.com/v1",
+        "api_key": "test-key",
+        "model_id": "deepseek-chat",
+        "temperature": 0.2,
+        "provider": "openai",
+    })
+
+    current_user_id.set("af-user-a")
+    agent_factory._conversation_agents.clear()
+    agent_factory.reload_conversation_agent("narrator")
+    keys_a = set(agent_factory._conversation_agents)
+    current_user_id.set("af-user-b")
+    agent_factory.reload_conversation_agent("narrator")
+    keys_b = set(agent_factory._conversation_agents)
+    current_user_id.set(DEFAULT_USER_ID)
+    assert "af-user-a" in keys_a
+    assert "af-user-b" in keys_b
+    assert agent_factory._conversation_agents["af-user-a"] is not agent_factory._conversation_agents["af-user-b"]

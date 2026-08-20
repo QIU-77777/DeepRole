@@ -46,7 +46,7 @@ from repository.status_file import get_allowed_fields
 ConversationAgent = Agent[None, LLMCharacterOutput | LLMNarratorOutput]
 StructuredAgent = Agent[None, object]
 
-_conversation_agents: dict[str, ConversationAgent] = {}
+_conversation_agents: dict[str, dict[str, ConversationAgent]] = {}  # user_id -> name -> agent
 _choices_agent: Agent[None, LLMChoices] | None = None
 _state_updater_agent: Agent[None, LLMStateUpdate] | None = None
 _character_factory_agent: Agent[None, LLMNewCharacterProfile] | None = None
@@ -172,6 +172,11 @@ def build_system_prompt(agent_name: str, soul_content: str) -> str:
     )
 
 
+def _user_key() -> str:
+    from repository.user_context import current_user_id
+    return current_user_id.get()
+
+
 def initialize_conversation_agents() -> None:
     for name in get_agent_names(include_narrator=True):
         reload_conversation_agent(name)
@@ -179,11 +184,12 @@ def initialize_conversation_agents() -> None:
 
 def reload_conversation_agent(name: str) -> None:
     global _choices_agent
-
+    user = _user_key()
+    agents = _conversation_agents.setdefault(user, {})
     soul = read_agent_file(name, "soul.md")
     config = get_llm_config()
     output_type = LLMNarratorOutput if name == "narrator" else LLMCharacterOutput
-    _conversation_agents[name] = _build_agent(
+    agents[name] = _build_agent(
         name=name,
         instructions=build_system_prompt(name, soul),
         config=config,
@@ -194,9 +200,10 @@ def reload_conversation_agent(name: str) -> None:
 
 
 def get_conversation_agent(name: str) -> ConversationAgent:
-    if name not in _conversation_agents:
+    agents = _conversation_agents.setdefault(_user_key(), {})
+    if name not in agents:
         reload_conversation_agent(name)
-    return _conversation_agents[name]
+    return agents[name]
 
 
 def get_choices_agent() -> Agent[None, LLMChoices]:
