@@ -9,14 +9,16 @@ import asyncio
 import json
 import re
 import traceback
-from functools import lru_cache
 from pathlib import Path
 
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+
+from repository import user_store
+from repository.user_context import current_user_id
 
 from app.agent_factory import initialize_conversation_agents, reload_conversation_agent
 from app.consolidation.flow import memory_consolidation_flow
@@ -72,10 +74,10 @@ def _last_choices_file() -> Path:
     return characters_dir() / "last_choices.json"
 
 
-_pending_state_update_task: asyncio.Task[None] | None = None
-_pending_state_update_requested = False
-_pending_choices_task: asyncio.Task[list[str]] | None = None
-_choices_generation_token = 0
+_pending_state_update_task: dict[str, asyncio.Task[None] | None] = {}
+_pending_state_update_requested: dict[str, bool] = {}
+_pending_choices_task: dict[str, asyncio.Task[list[str]] | None] = {}
+_choices_generation_token: dict[str, int] = {}
 _RECENT_HISTORY_LIMIT = 12
 _MEMORY_GRAPH_LABEL_LIMIT = 42
 _MEMORY_GRAPH_DETAIL_LIMIT = 260
@@ -113,19 +115,18 @@ def _consume_cancelled_choices_task(task: asyncio.Task[list[str]]) -> None:
 
 def _invalidate_pending_choices(*, clear_saved: bool = False) -> int:
     """让旧选项生成失效；返回当前请求应使用的 generation token。"""
-    global _pending_choices_task, _choices_generation_token
-    _choices_generation_token += 1
-    task = _pending_choices_task
+    user_id = current_user_id.get()
+    _choices_generation_token[user_id] = _choices_generation_token.get(user_id, 0) + 1
+    task = _pending_choices_task.get(user_id)
     if task is not None and not task.done():
         task.cancel()
         task.add_done_callback(_consume_cancelled_choices_task)
-    _pending_choices_task = None
+    _pending_choices_task[user_id] = None
     if clear_saved:
         _clear_last_choices()
-    return _choices_generation_token
+    return _choices_generation_token[user_id]
 
 
-@lru_cache(maxsize=64)
 def _get_agent_display_name(agent_name: str) -> str:
     if agent_name == "narrator":
         return "旁白"
@@ -350,50 +351,102 @@ def _sse_event(event_type: str, data: dict) -> str:
 
 async def _settle_pending_state_update(*, cancel: bool = False) -> None:
     """结清后台 state_updater 任务。cancel=True 时先取消（用于重置/读档）。"""
-    global _pending_state_update_task, _pending_state_update_requested
-    task = _pending_state_update_task
+    user_id = current_user_id.get()
+    task = _pending_state_update_task.get(user_id)
     if task is None:
         return
     if cancel and not task.done():
-        _pending_state_update_requested = False
+        _pending_state_update_requested[user_id] = False
         task.cancel()
     try:
         await task
     except asyncio.CancelledError:
         routing_logger.info("[state_updater] 后台任务已取消")
     finally:
-        if _pending_state_update_task is task:
+        if _pending_state_update_task.get(user_id) is task:
             if not task.done():
                 # _settle 自身被外部取消（如 wait_for 超时），而非 cancel=True 主动取消：
                 # 内层 _run_state_update_loop 仍在运行，必须显式取消，否则成为孤儿任务。
                 task.cancel()
-            _pending_state_update_task = None
+            _pending_state_update_task[user_id] = None
 
 
 async def _run_state_update_loop() -> None:
     """串行执行 state_updater；运行期间的新请求合并为最后一次补跑。"""
-    global _pending_state_update_task, _pending_state_update_requested
+    user_id = current_user_id.get()
     try:
         while True:
-            _pending_state_update_requested = False
+            _pending_state_update_requested[user_id] = False
             await narrator_service.update_state()
-            if not _pending_state_update_requested:
+            if not _pending_state_update_requested.get(user_id, False):
                 break
     finally:
         # 只由本 task 自身清理全局引用：若任务因超时成为孤儿后另一个新任务已注册，
         # 此处若无条件赋 None 会覆盖新任务的引用，导致 _settle 下次直接 return 跳过等待。
-        if _pending_state_update_task is asyncio.current_task():
-            _pending_state_update_task = None
-            _pending_state_update_requested = False
+        if _pending_state_update_task.get(user_id) is asyncio.current_task():
+            _pending_state_update_task[user_id] = None
+            _pending_state_update_requested[user_id] = False
 
 
 def _start_state_update() -> None:
-    global _pending_state_update_task, _pending_state_update_requested
-    if _pending_state_update_task is not None and not _pending_state_update_task.done():
-        _pending_state_update_requested = True
+    user_id = current_user_id.get()
+    task = _pending_state_update_task.get(user_id)
+    if task is not None and not task.done():
+        _pending_state_update_requested[user_id] = True
         return
-    _pending_state_update_requested = False
-    _pending_state_update_task = asyncio.create_task(_run_state_update_loop())
+    _pending_state_update_requested[user_id] = False
+    _pending_state_update_task[user_id] = asyncio.create_task(_run_state_update_loop())
+
+
+# =============================================================================
+# 身份依赖 & /api/me
+# =============================================================================
+
+
+_SAFE_USER_ID_RE = re.compile(r"^[0-9a-f]{32}$")
+
+
+def _validate_user_id(user_id: str) -> None:
+    """user_id 必须为服务器生成的 32 位 hex uuid，杜绝路径穿越。"""
+    if not _SAFE_USER_ID_RE.match(user_id):
+        raise HTTPException(status_code=500, detail="服务器内部错误：非法用户标识。")
+
+
+async def require_user(request: Request) -> str:
+    """FastAPI 依赖：解析 X-User-Token → 设 contextvar → 返回 user_id。
+
+    必须为 async：同步依赖会被 Starlette 丢进线程池执行，
+    contextvar 的写入无法回传给异步请求处理上下文。
+    """
+    token = request.headers.get("X-User-Token")
+    user_id = user_store.resolve_user(token)
+    if user_id is None:
+        raise HTTPException(status_code=401, detail="无效的访问凭证，请刷新页面重新进入。")
+    _validate_user_id(user_id)
+    current_user_id.set(user_id)
+    return user_id
+
+
+async def _ensure_user_world(user_id: str) -> None:
+    """新用户首次进入时从模板初始化默认世界。"""
+    if not characters_dir().exists():
+        await reset_game("drama")
+
+
+@app.get("/api/me")
+async def api_me(request: Request) -> JSONResponse:
+    """获取当前用户；无 token 时创建新用户并初始化默认世界。"""
+    token = request.headers.get("X-User-Token")
+    user_id = user_store.resolve_user(token)
+    if user_id is None:
+        token, user_id = user_store.create_user()
+        _validate_user_id(user_id)
+        current_user_id.set(user_id)
+        await _ensure_user_world(user_id)
+    else:
+        _validate_user_id(user_id)
+        current_user_id.set(user_id)
+    return JSONResponse({"token": token, "user_id": user_id})
 
 
 # =============================================================================
@@ -427,7 +480,7 @@ async def index() -> HTMLResponse:
 
 
 @app.get("/api/init")
-async def api_init() -> JSONResponse:
+async def api_init(_: str = Depends(require_user)) -> JSONResponse:
     """返回初始状态：是否有存档、最近历史、最近选项。"""
     has_save = has_existing_save()
     recent: list[dict] = []
@@ -458,7 +511,7 @@ async def api_init() -> JSONResponse:
 
 
 @app.get("/api/history")
-async def api_history(before_turn: int, limit: int = 30) -> JSONResponse:
+async def api_history(before_turn: int, limit: int = 30, _: str = Depends(require_user)) -> JSONResponse:
     limit = max(1, min(limit, 200))
     raw = load_history_before(before_turn=before_turn, limit=limit)
     messages = [m for m in (_format_history_message(item) for item in raw) if m]
@@ -466,12 +519,12 @@ async def api_history(before_turn: int, limit: int = 30) -> JSONResponse:
 
 
 @app.get("/api/history/dates")
-async def api_history_dates() -> JSONResponse:
+async def api_history_dates(_: str = Depends(require_user)) -> JSONResponse:
     return JSONResponse({"anchors": extract_game_date_anchors()})
 
 
 @app.get("/api/history/search")
-async def api_history_search(q: str, limit: int = 50) -> JSONResponse:
+async def api_history_search(q: str, limit: int = 50, _: str = Depends(require_user)) -> JSONResponse:
     limit = max(1, min(limit, 200))
     raw = search_history(q, limit=limit)
     messages = [m for m in (_format_history_message(item) for item in raw) if m]
@@ -484,7 +537,7 @@ async def api_history_search(q: str, limit: int = 50) -> JSONResponse:
 
 
 @app.get("/api/stories")
-async def api_stories() -> JSONResponse:
+async def api_stories(_: str = Depends(require_user)) -> JSONResponse:
     """列出可选故事模板。"""
     stories = [
         {
@@ -504,7 +557,7 @@ async def api_stories() -> JSONResponse:
 
 
 @app.get("/api/memory-graph")
-async def api_memory_graph(agent: str | None = None) -> JSONResponse:
+async def api_memory_graph(agent: str | None = None, _: str = Depends(require_user)) -> JSONResponse:
     """返回指定角色的 understanding ↔ episode 可视化数据。"""
     agents = _memory_graph_agents()
     agent_names = {item["name"] for item in agents}
@@ -544,7 +597,7 @@ class NewGameRequest(BaseModel):
 
 
 @app.post("/api/new_game")
-async def api_new_game(req: NewGameRequest) -> JSONResponse:
+async def api_new_game(req: NewGameRequest, _: str = Depends(require_user)) -> JSONResponse:
     """重置并开始新游戏，返回开场内容。"""
     if memory_consolidation_flow.is_running:
         return JSONResponse(
@@ -585,7 +638,7 @@ class ChatRequest(BaseModel):
 
 async def _chat_stream(user_input: str):
     """核心游戏循环，通过 SSE 逐步推送结果。"""
-    global _pending_choices_task
+    user_id = current_user_id.get()
     choices_token = _invalidate_pending_choices(clear_saved=True)
     # 0 = 哨兵：本轮还没有 narrator 成功发言，不触发 consolidation
     current_turn = 0
@@ -668,9 +721,9 @@ async def _chat_stream(user_input: str):
             )
 
     choices_task: asyncio.Task[list[str]] | None = None
-    if agent_responses and choices_token == _choices_generation_token:
+    if agent_responses and choices_token == _choices_generation_token.get(user_id, 0):
         choices_task = asyncio.create_task(generate_choices(narrator_output, agent_responses))
-        _pending_choices_task = choices_task
+        _pending_choices_task[user_id] = choices_task
 
     _start_state_update()
     if current_turn > 0:
@@ -686,10 +739,10 @@ async def _chat_stream(user_input: str):
         except asyncio.CancelledError:
             return
         finally:
-            if _pending_choices_task is choices_task:
-                _pending_choices_task = None
+            if _pending_choices_task.get(user_id) is choices_task:
+                _pending_choices_task[user_id] = None
 
-        if choices and choices_token == _choices_generation_token:
+        if choices and choices_token == _choices_generation_token.get(user_id, 0):
             _save_last_choices(choices)
             yield _sse_event("choices", {"choices": choices})
 
@@ -700,7 +753,7 @@ async def _chat_stream(user_input: str):
 
 
 @app.post("/api/chat")
-async def api_chat(req: ChatRequest) -> StreamingResponse:
+async def api_chat(req: ChatRequest, _: str = Depends(require_user)) -> StreamingResponse:
     return StreamingResponse(
         _chat_stream(req.message),
         media_type="text/event-stream",
@@ -714,7 +767,7 @@ async def api_chat(req: ChatRequest) -> StreamingResponse:
 
 
 @app.get("/api/status")
-async def api_status() -> JSONResponse:
+async def api_status(_: str = Depends(require_user)) -> JSONResponse:
     """轻量状态查询。前端在收到 done 后若 consolidating=true 会轮询此接口。"""
     running = memory_consolidation_flow.is_running
     payload: dict = {"consolidating": running, "scene_status": _current_scene_status()}
@@ -739,7 +792,7 @@ async def api_status() -> JSONResponse:
 
 
 @app.get("/api/saves")
-async def api_list_saves() -> JSONResponse:
+async def api_list_saves(_: str = Depends(require_user)) -> JSONResponse:
     """列出所有存档，并返回按故事世界观拼出的临时世界线树。"""
     saves = list_save_archives()
     return JSONResponse(
@@ -761,7 +814,7 @@ class SaveRequest(BaseModel):
 
 
 @app.post("/api/save")
-async def api_save(req: SaveRequest | None = None) -> JSONResponse:
+async def api_save(req: SaveRequest | None = None, _: str = Depends(require_user)) -> JSONResponse:
     """导出新的不可变世界线节点。"""
     if memory_consolidation_flow.is_running:
         return JSONResponse(
@@ -803,7 +856,7 @@ class LoadRequest(BaseModel):
 
 
 @app.post("/api/load")
-async def api_load(req: LoadRequest) -> JSONResponse:
+async def api_load(req: LoadRequest, _: str = Depends(require_user)) -> JSONResponse:
     """加载存档。"""
     if memory_consolidation_flow.is_running:
         return JSONResponse(
@@ -844,7 +897,7 @@ async def api_load(req: LoadRequest) -> JSONResponse:
 
 
 @app.delete("/api/save-node/{filename}")
-async def api_delete_save_node(filename: str) -> JSONResponse:
+async def api_delete_save_node(filename: str, _: str = Depends(require_user)) -> JSONResponse:
     """删除没有子分支的单个存档节点。"""
     deleted, reason = delete_save_leaf(filename)
     if deleted:
@@ -864,7 +917,7 @@ async def api_delete_save_node(filename: str) -> JSONResponse:
 
 
 @app.delete("/api/save/{filename}")
-async def api_delete_save(filename: str) -> JSONResponse:
+async def api_delete_save(filename: str, _: str = Depends(require_user)) -> JSONResponse:
     """删除以指定存档为根的整棵 Game 世界线。"""
     deleted = delete_save_game(filename)
     if deleted is not None:
@@ -882,7 +935,7 @@ class ResetRequest(BaseModel):
 
 
 @app.post("/api/reset")
-async def api_reset(req: ResetRequest) -> JSONResponse:
+async def api_reset(req: ResetRequest, _: str = Depends(require_user)) -> JSONResponse:
     """重置游戏。"""
     if memory_consolidation_flow.is_running:
         return JSONResponse(
@@ -918,7 +971,7 @@ async def api_reset(req: ResetRequest) -> JSONResponse:
 
 
 @app.get("/api/characters")
-async def api_characters() -> JSONResponse:
+async def api_characters(_: str = Depends(require_user)) -> JSONResponse:
     """返回当前所有角色的身份信息与位置信息。"""
     try:
         narrator_status = read_agent_file("narrator", "status.md")

@@ -1,11 +1,14 @@
 """测试 server 层 state_updater 后台任务协调。"""
 
+import asyncio
 import json
 import os
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+
+from repository.user_context import current_user_id
 
 project_root = Path(__file__).parent.parent
 os.chdir(project_root)
@@ -17,17 +20,47 @@ except ModuleNotFoundError as exc:
     pytest.skip(f"skip server tests: missing dependency ({exc})", allow_module_level=True)
 
 
+def _user() -> str:
+    return current_user_id.get()
+
+
+def _pending_state_task() -> asyncio.Task | None:
+    return server_module._pending_state_update_task.get(_user())
+
+
+def _set_pending_state_task(task: asyncio.Task | None) -> None:
+    server_module._pending_state_update_task[_user()] = task
+
+
+def _pending_state_requested() -> bool:
+    return server_module._pending_state_update_requested.get(_user(), False)
+
+
+def _reset_pending_state() -> None:
+    server_module._pending_state_update_task.clear()
+    server_module._pending_state_update_requested.clear()
+
+
+def _pending_choices_task() -> asyncio.Task | None:
+    return server_module._pending_choices_task.get(_user())
+
+
+def _reset_choices_state() -> None:
+    server_module._pending_choices_task.clear()
+    server_module._choices_generation_token.clear()
+
+
 @pytest.fixture(autouse=True)
 def isolate_last_choices_file(monkeypatch, tmp_path):
     monkeypatch.setattr(server_module, "_last_choices_file", lambda: tmp_path / "last_choices.json")
-    server_module._pending_choices_task = None
-    server_module._choices_generation_token = 0
+    _reset_choices_state()
+    _reset_pending_state()
     yield
-    task = server_module._pending_choices_task
+    task = _pending_choices_task()
     if task is not None and not task.done():
         task.cancel()
-    server_module._pending_choices_task = None
-    server_module._choices_generation_token = 0
+    _reset_choices_state()
+    _reset_pending_state()
 
 
 def _parse_sse_chunk(chunk: str) -> dict:
@@ -58,15 +91,15 @@ async def test_settle_pending_state_update_waits_for_background_task(monkeypatch
         started = True
 
     monkeypatch.setattr(server_module.narrator_service.__class__, "update_state", fake_update_state)
-    server_module._pending_state_update_task = None
+    _reset_pending_state()
 
     server_module._start_state_update()
-    assert server_module._pending_state_update_task is not None
+    assert _pending_state_task() is not None
 
     await server_module._settle_pending_state_update()
 
     assert started is True
-    assert server_module._pending_state_update_task is None
+    assert _pending_state_task() is None
 
 
 @pytest.mark.asyncio
@@ -78,16 +111,16 @@ async def test_settle_pending_state_update_cancels_background_task(monkeypatch):
             await server_module.asyncio.sleep(0)
 
     monkeypatch.setattr(server_module.narrator_service.__class__, "update_state", fake_update_state)
-    server_module._pending_state_update_task = None
+    _reset_pending_state()
 
     server_module._start_state_update()
-    task = server_module._pending_state_update_task
+    task = _pending_state_task()
     assert task is not None
 
     await server_module._settle_pending_state_update(cancel=True)
 
     assert task.cancelled()
-    assert server_module._pending_state_update_task is None
+    assert _pending_state_task() is None
 
 
 @pytest.mark.asyncio
@@ -104,26 +137,25 @@ async def test_start_state_update_coalesces_while_running(monkeypatch):
             await release.wait()
 
     monkeypatch.setattr(server_module.narrator_service.__class__, "update_state", fake_update_state)
-    server_module._pending_state_update_task = None
-    server_module._pending_state_update_requested = False
+    _reset_pending_state()
 
     server_module._start_state_update()
-    task = server_module._pending_state_update_task
+    task = _pending_state_task()
     assert task is not None
     await started.wait()
 
     server_module._start_state_update()
     server_module._start_state_update()
 
-    assert server_module._pending_state_update_task is task
-    assert server_module._pending_state_update_requested is True
+    assert _pending_state_task() is task
+    assert _pending_state_requested() is True
 
     release.set()
     await server_module._settle_pending_state_update()
 
     assert calls == 2
-    assert server_module._pending_state_update_task is None
-    assert server_module._pending_state_update_requested is False
+    assert _pending_state_task() is None
+    assert _pending_state_requested() is False
 
 
 @pytest.mark.asyncio
@@ -137,8 +169,7 @@ async def test_chat_stream_does_not_wait_for_pending_state_update(monkeypatch):
         return None, False
 
     task = server_module.asyncio.create_task(blocking_task())
-    server_module._pending_state_update_task = task
-    server_module._pending_state_update_requested = False
+    _set_pending_state_task(task)
     monkeypatch.setattr(server_module.narrator_service.__class__, "route", fake_route)
 
     try:
@@ -149,8 +180,7 @@ async def test_chat_stream_does_not_wait_for_pending_state_update(monkeypatch):
     finally:
         release.set()
         await task
-        server_module._pending_state_update_task = None
-        server_module._pending_state_update_requested = False
+        _reset_pending_state()
 
     assert chunks == ['data: {"type": "done", "consolidating": false}\n\n']
 
@@ -329,7 +359,7 @@ async def test_api_save_returns_error_detail(monkeypatch):
         fake_export_save_archive_with_detail,
     )
     monkeypatch.setattr(server_module.routing_logger, "error", fake_log_error)
-    server_module._pending_state_update_task = None
+    _reset_pending_state()
 
     response = await server_module.api_save()
 
@@ -352,7 +382,7 @@ async def test_api_save_rejects_target_filename(monkeypatch):
         "export_save_archive_with_detail",
         fake_export_save_archive_with_detail,
     )
-    server_module._pending_state_update_task = None
+    _reset_pending_state()
 
     response = await server_module.api_save(
         server_module.SaveRequest(filename="school_slot.zip")
