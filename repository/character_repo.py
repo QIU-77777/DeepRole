@@ -18,24 +18,30 @@ class CharacterRepository:
     """游戏角色的文件读写仓库；soul 缓存随存档生命周期，load/reset 后失效。"""
 
     def __init__(self) -> None:
-        self._soul_cache: dict[str, str] = {}
+        self._soul_cache: dict[str, dict[str, str]] = {}
+
+    def _user_cache(self) -> dict[str, str]:
+        from repository.user_context import current_user_id
+        return self._soul_cache.setdefault(current_user_id.get(), {})
 
     # ── 读 ──
 
     def load(self, name: str) -> Character:
         """读 soul.md（带缓存）并返回 Character 实体。"""
-        soul = self._soul_cache.get(name)
+        cache = self._user_cache()
+        soul = cache.get(name)
         if soul is None:
             soul = read_agent_file(name, "soul.md")
-            self._soul_cache[name] = soul
+            cache[name] = soul
         return Character(name=name, soul=soul)
 
     def invalidate(self, name: str | None = None) -> None:
         """存档恢复 / reset 后清空 soul 缓存（name=None 清全部）。"""
+        cache = self._user_cache()
         if name is None:
-            self._soul_cache.clear()
+            cache.clear()
         else:
-            self._soul_cache.pop(name, None)
+            cache.pop(name, None)
 
     # ── 写回策略 ──
 
