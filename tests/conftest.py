@@ -14,6 +14,18 @@ except ImportError:
     pass
 
 from app.llm_schema import LLMNarratorOutput
+from repository.user_context import DEFAULT_USER_ID, current_user_id
+
+
+@pytest.fixture
+def isolated_user():
+    """每个使用它的测试自动落入独立测试用户，结束后恢复默认。"""
+    import uuid
+
+    user = f"test-{uuid.uuid4().hex}"
+    current_user_id.set(user)
+    yield user
+    current_user_id.set(DEFAULT_USER_ID)
 
 
 @pytest.fixture(autouse=True)
