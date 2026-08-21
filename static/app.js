@@ -21,6 +21,7 @@ document.addEventListener("alpine:init", () => {
     ...window.agentGalWorldline.createState(),
     ...window.agentGalSearch.createState(),
     ...window.agentGalChat.createState(),
+    token: null,
     hasSave: false,
     isCompact: false,
     drawerOpen: false,
@@ -49,6 +50,12 @@ document.addEventListener("alpine:init", () => {
       }
       this.setupViewportListener();
       this.setupVisualViewportListener();
+
+      try {
+        await this.ensureToken();
+      } catch (error) {
+        this.setNotice("身份初始化失败，部分功能可能暂时不可用。", "error", true);
+      }
 
       try {
         const storiesResponse = await this.fetchJson("/api/stories");
@@ -230,8 +237,27 @@ document.addEventListener("alpine:init", () => {
       this.showResetConfirmation();
     },
 
+    async ensureToken() {
+      if (this.token) return;
+      const stored = localStorage.getItem("deeprole_token");
+      if (stored) {
+        this.token = stored;
+        return;
+      }
+      const response = await fetch("/api/me");
+      if (!response.ok) throw new Error(`/api/me failed: ${response.status}`);
+      const data = await response.json();
+      this.token = data.token;
+      localStorage.setItem("deeprole_token", this.token);
+    },
+
     async fetchJson(url, options = {}) {
-      const response = await fetch(url, options);
+      await this.ensureToken();
+      const headers = {
+        ...(options.headers || {}),
+        "X-User-Token": this.token,
+      };
+      const response = await fetch(url, { ...options, headers });
       if (!response.ok) {
         let detail = "";
         try {
@@ -435,7 +461,9 @@ document.addEventListener("alpine:init", () => {
       const tick = async () => {
         if (this.consolidatingPollGen !== gen) return;
         try {
-          const response = await fetch("/api/status");
+          const response = await fetch("/api/status", {
+            headers: { "X-User-Token": this.token },
+          });
           if (this.consolidatingPollGen !== gen) return;
           if (response.ok) {
             const data = await response.json();

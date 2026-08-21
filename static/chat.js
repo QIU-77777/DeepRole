@@ -537,9 +537,13 @@
       async streamChat(message, streamId) {
         const controller = new AbortController();
         this.activeStreamController = controller;
+        await this.ensureToken();
         const response = await fetch("/api/chat", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "X-User-Token": this.token,
+          },
           body: JSON.stringify({ message }),
           signal: controller.signal,
         });
