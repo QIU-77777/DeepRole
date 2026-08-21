@@ -22,6 +22,7 @@ document.addEventListener("alpine:init", () => {
     ...window.agentGalSearch.createState(),
     ...window.agentGalChat.createState(),
     token: null,
+    _tokenPromise: null,
     hasSave: false,
     isCompact: false,
     drawerOpen: false,
@@ -239,7 +240,17 @@ document.addEventListener("alpine:init", () => {
 
     async ensureToken() {
       if (this.token) return;
-      const stored = localStorage.getItem("deeprole_token");
+      if (this._tokenPromise) return this._tokenPromise;
+      this._tokenPromise = this._ensureTokenImpl()
+        .finally(() => { this._tokenPromise = null; });
+      return this._tokenPromise;
+    },
+
+    async _ensureTokenImpl() {
+      let stored = null;
+      try {
+        stored = localStorage.getItem("deeprole_token");
+      } catch (e) { /* storage unavailable */ }
       if (stored) {
         this.token = stored;
         return;
@@ -248,7 +259,9 @@ document.addEventListener("alpine:init", () => {
       if (!response.ok) throw new Error(`/api/me failed: ${response.status}`);
       const data = await response.json();
       this.token = data.token;
-      localStorage.setItem("deeprole_token", this.token);
+      try {
+        localStorage.setItem("deeprole_token", this.token);
+      } catch (e) { /* storage unavailable — memory-only */ }
     },
 
     async fetchJson(url, options = {}) {
