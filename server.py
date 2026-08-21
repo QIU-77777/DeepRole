@@ -427,8 +427,11 @@ async def require_user(request: Request) -> str:
     return user_id
 
 
-async def _ensure_user_world(user_id: str) -> None:
-    """新用户首次进入时从模板初始化默认世界。"""
+async def _ensure_user_world() -> None:
+    """当前用户首次进入时从模板初始化默认世界；目录已存在则无操作（幂等自愈）。
+
+    依赖已由调用方写入的 current_user_id contextvar 派生数据目录。
+    """
     if not characters_dir().exists():
         await reset_game("drama")
 
@@ -441,11 +444,10 @@ async def api_me(request: Request) -> JSONResponse:
     if user_id is None:
         token, user_id = user_store.create_user()
         _validate_user_id(user_id)
-        current_user_id.set(user_id)
-        await _ensure_user_world(user_id)
     else:
         _validate_user_id(user_id)
-        current_user_id.set(user_id)
+    current_user_id.set(user_id)
+    await _ensure_user_world()
     return JSONResponse({"token": token, "user_id": user_id})
 
 

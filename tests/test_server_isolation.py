@@ -1,4 +1,6 @@
 """API 级隔离测试：两个 token 各自独立世界。"""
+import shutil
+
 import httpx
 import pytest
 import pytest_asyncio
@@ -33,6 +35,7 @@ def _isolate_runtime_world(tmp_path, monkeypatch):
     monkeypatch.setattr(server_module, "characters_dir", _characters_dir)
     monkeypatch.setattr(runtime_state_mod, "characters_dir", _characters_dir)
     monkeypatch.setattr(save_manager, "reset_logs", lambda: None)
+    return _characters_dir
 
 
 @pytest_asyncio.fixture
@@ -58,6 +61,30 @@ async def test_me_returns_same_user_for_same_token(client):
     headers = {"X-User-Token": token}
     r2 = await client.get("/api/me", headers=headers)
     assert r2.json()["user_id"] == r1.json()["user_id"]
+
+
+@pytest.mark.asyncio
+async def test_me_self_heals_deleted_world(client, _isolate_runtime_world):
+    r1 = await client.get("/api/me")
+    user_id = r1.json()["user_id"]
+    token = r1.json()["token"]
+    headers = {"X-User-Token": token}
+
+    current_user_id.set(user_id)
+    chars_dir = _isolate_runtime_world()
+    assert chars_dir.exists()
+    shutil.rmtree(chars_dir)
+    assert not chars_dir.exists()
+    current_user_id.set(DEFAULT_USER_ID)
+
+    r2 = await client.get("/api/me", headers=headers)
+    assert r2.status_code == 200
+    assert r2.json()["user_id"] == user_id
+
+    current_user_id.set(user_id)
+    assert chars_dir.exists()
+    assert (chars_dir / ".story_id").read_text(encoding="utf-8").strip() == "drama"
+    current_user_id.set(DEFAULT_USER_ID)
 
 
 @pytest.mark.asyncio
