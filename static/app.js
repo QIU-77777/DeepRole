@@ -265,12 +265,15 @@ document.addEventListener("alpine:init", () => {
     },
 
     async fetchJson(url, options = {}) {
-      await this.ensureToken();
-      const headers = {
-        ...(options.headers || {}),
-        "X-User-Token": this.token,
-      };
-      const response = await fetch(url, { ...options, headers });
+      let response = await this._fetchWithToken(url, options);
+      if (response.status === 401 && this.token) {
+        // token 失效：清空后重新注册一次
+        this.token = null;
+        try { localStorage.removeItem("deeprole_token"); } catch (e) {}
+        this._tokenPromise = null;
+        await this.ensureToken();
+        response = await this._fetchWithToken(url, options);
+      }
       if (!response.ok) {
         let detail = "";
         try {
@@ -292,6 +295,15 @@ document.addEventListener("alpine:init", () => {
         throw new Error(`${url} failed: ${response.status}${detail ? ` ${detail.slice(0, 120)}` : ""}`);
       }
       return response.json();
+    },
+
+    async _fetchWithToken(url, options = {}) {
+      await this.ensureToken();
+      const headers = {
+        ...(options.headers || {}),
+        "X-User-Token": this.token,
+      };
+      return fetch(url, { ...options, headers });
     },
 
     deleteJson(url) {
